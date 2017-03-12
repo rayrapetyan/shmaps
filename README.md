@@ -1,19 +1,23 @@
 # shmaps
-Persistent shared memory maps with STL containers and TTL support
+Persistent shared memory maps with STL containers and TTL support.
 
 The proposed solution allows you to organize multiple independent mapping (key-value) storages in a shared memory segment.
-Under the hood a boost/interprocess is being used.
+
+Based on a boost/interprocess module.
 
 ## Compilation
 You should add shmaps.cpp and shmaps.h into your sources tree.
 
 ## Init
 ```
+    #include "shmaps.h"
+    
     namespace shmem = shared_memory;
     
     const long est_shmem_size = 1024 * 1024 * 1024; // 1MB
     
     if (shmem::init(est_shmem_size) != est_shmem_size) {
+        // shmaps segment of a different size already initilized, drop and recreate
         shmem::remove();
         if (shmem::init(est_shmem_size) != est_shmem_size) {
             return 1;

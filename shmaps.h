@@ -1,6 +1,5 @@
-#ifndef SHARED_MAP_H
-#define SHARED_MAP_H
-
+#ifndef SHMAPS_H
+#define SHMAPS_H
 
 #include <unistd.h>
 #include <iostream>
@@ -10,9 +9,11 @@
 #include <boost/interprocess/sync/interprocess_sharable_mutex.hpp>
 #include <boost/interprocess/sync/named_sharable_mutex.hpp>
 #include <boost/unordered_map.hpp>
+#include <boost/unordered_set.hpp>
 #include <boost/utility.hpp>
 #include <boost/interprocess/detail/managed_memory_impl.hpp>
 #include <boost/interprocess/containers/set.hpp>
+#include <boost/interprocess/containers/map.hpp>
 #include <boost/interprocess/containers/string.hpp>
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <boost/interprocess/sync/interprocess_mutex.hpp>
@@ -22,21 +23,21 @@
 namespace bip = boost::interprocess;
 
 namespace shared_memory {
-
     typedef bip::managed_shared_memory::segment_manager SegmentManager;
-    typedef bip::node_allocator<void, SegmentManager> VoidAllocator;
-    typedef bip::private_node_allocator<void, SegmentManager> PrivateVoidAllocator;
-    typedef bip::private_node_allocator<char, SegmentManager> PrivateCharAllocator;
-    typedef bip::basic_string<char, std::char_traits<char>, PrivateCharAllocator> String;
+    typedef bip::allocator<void, SegmentManager> VoidAllocator;
+    typedef bip::node_allocator<void, SegmentManager> VoidNodeAllocator;
+    typedef bip::private_node_allocator<void, SegmentManager> PrivateVoidNodeAllocator;
+    typedef bip::private_node_allocator<char, SegmentManager> PrivateCharNodeAllocator;
+    typedef bip::basic_string<char, std::char_traits<char>, PrivateCharNodeAllocator> String;
 
     typedef bip::interprocess_mutex MutexType;
-    typedef bip::scoped_lock<MutexType> LockType;
+    typedef bip::scoped_lock <MutexType> LockType;
 
     //const uint shmem_seg_size = 1000000;
     const std::string shmem_seg_name = "SharedMemorySegment";
     //static bip::managed_shared_memory *segment_ = new bip::managed_shared_memory(bip::open_or_create, shmem_seg_name.c_str(), shmem_seg_size);
     extern bip::managed_shared_memory *segment_;
-    extern PrivateVoidAllocator *seg_alloc;
+    extern PrivateVoidNodeAllocator *seg_alloc;
 
     const uint purge_min_recs = 100000;
     const uint purge_recs = 2;
@@ -44,8 +45,11 @@ namespace shared_memory {
     const uint purge_range = 10;
 
     long init(long size);
+
     void remove();
+
     long grow(long add_size);
+
     long size();
 
     struct Stats {
@@ -88,21 +92,18 @@ namespace shared_memory {
     };
 
 
-
-
-
     template<class PayloadType>  // PayloadType could be a set or int or complex struct (with strings)
     class MappedValType {
     public:
-        MappedValType() { }
+        MappedValType() {}
 
-        MappedValType(time_t expires_at, const PrivateVoidAllocator &void_alloc) : payload(void_alloc),
-                                                                                   expires_at(expires_at) { }
+        MappedValType(time_t expires_at, const PrivateVoidNodeAllocator &void_alloc) : payload(void_alloc),
+                                                                                       expires_at(expires_at) {}
 
         MappedValType(const PayloadType &payload, const time_t &expires_at) : payload(payload),
-                                                                              expires_at(expires_at) { }
+                                                                              expires_at(expires_at) {}
 
-        ~MappedValType() { }
+        ~MappedValType() {}
 
         PayloadType payload;
         time_t expires_at;
@@ -113,7 +114,14 @@ namespace shared_memory {
     class Map {
 
     public:
-        Map() { };
+        typedef std::pair<const KeyType, MappedValType<PayloadType> > ValueType;
+        typedef bip::private_node_allocator <ValueType, SegmentManager> PrivateValueTypeNodeAllocator;
+        typedef bip::node_allocator <ValueType, SegmentManager> ValueTypeNodeAllocator;
+        typedef bip::allocator <ValueType, SegmentManager> ValueTypeAllocator;
+        typedef bip::map <KeyType, MappedValType<PayloadType>, std::less<KeyType>, ValueTypeAllocator> MapImpl;  // #allocator
+        typedef typename MapImpl::iterator MapImplIterator;
+
+        Map() {};
 
         explicit Map(const std::string &name) : map_name_(name) {
             //std::cout << map_name_ << " ctor" << std::endl << std::flush;
@@ -122,10 +130,10 @@ namespace shared_memory {
                 segment_ = new bip::managed_shared_memory(bip::open_only, shmem_seg_name.c_str());
             }
             assert(segment_ != nullptr);
-            map_ = segment_->find_or_construct<MapImpl>(map_name_.data())(3,
-                                                                          boost::hash<KeyType>(),
-                                                                          std::equal_to<KeyType>(),
-                                                                          VoidAllocator(segment_->get_segment_manager()));
+            map_ = segment_->find_or_construct<MapImpl>(map_name_.data())(
+                    std::less<KeyType>(),
+                    segment_->get_allocator<MappedValType<PayloadType>>());
+            //VoidNodeAllocator(segment_->get_segment_manager()));
             assert(map_ != nullptr);
             mutex_ = segment_->find_or_construct<MutexType>(std::string(name + "mutex").data())();
             assert(mutex_ != nullptr);
@@ -139,7 +147,7 @@ namespace shared_memory {
             //std::cout << map_name_ << " dtor" << std::endl;
         }
 
-        MutexType& mutex() {
+        MutexType &mutex() {
             return *mutex_;
         }
 
@@ -183,7 +191,7 @@ namespace shared_memory {
             if (expires) {
                 expires_at = unix_now + expires;
             }
-            String k_(k, PrivateVoidAllocator(segment_->get_segment_manager()));
+            String k_(k, PrivateVoidNodeAllocator(segment_->get_segment_manager()));
             auto it = map_->find(k_);
             if (it == map_->end()) {
                 auto ins_res = map_->insert(ValueType(k_, MappedValType<PayloadType>(val, expires_at)));
@@ -218,7 +226,7 @@ namespace shared_memory {
         }
 
         bool get(const char *k, PayloadType *val) {
-            String k_(k, PrivateVoidAllocator(segment_->get_segment_manager()));
+            String k_(k, PrivateVoidNodeAllocator(segment_->get_segment_manager()));
             auto it = map_->find(k_);
             if (it != map_->end()) {
                 if ((*it).second.expires_at && (*it).second.expires_at < time(NULL)) {
@@ -299,20 +307,13 @@ namespace shared_memory {
                 return false;
             }
         }
+
         Stats *stats;
 
     protected:
-        typedef std::pair<const KeyType, MappedValType<PayloadType> > ValueType;
-        typedef bip::node_allocator<ValueType, SegmentManager> ShmemAllocator;
-        //typedef map<KeyType, MappedTypeExp<ValPayloadType>, std::less<KeyType>, ShmemAllocator> MapImpl;
-        typedef boost::unordered_map<KeyType, MappedValType<PayloadType>, boost::hash<KeyType>, std::equal_to<KeyType>, ShmemAllocator> MapImpl;
-        typedef typename MapImpl::iterator MapImplIterator;
-
         MapImpl *map_;
         std::string map_name_;
         MutexType *mutex_;
-
-
 
         void purge_expired(MapImplIterator it, const uint count) {
             // tries to purge expired entries
@@ -346,9 +347,10 @@ namespace shared_memory {
     };
 
     template<class KeyType, class ValType>
-    class MapSet : public Map<KeyType, bip::set<ValType, std::less<ValType>, bip::private_node_allocator<ValType, SegmentManager>>> {
+    class MapSet : public Map<KeyType, bip::set<ValType, std::less<ValType>,
+                   bip::private_node_allocator<ValType, SegmentManager>>> {
 
-        typedef bip::set<ValType, std::less<ValType>, bip::private_node_allocator<ValType, SegmentManager>> PayloadType;
+        typedef bip::set <ValType, std::less<ValType>, bip::private_node_allocator<ValType, SegmentManager>> PayloadType;
 
         using Map<KeyType, PayloadType>::mutex_;
         using Map<KeyType, PayloadType>::map_;
@@ -357,11 +359,12 @@ namespace shared_memory {
         using Map<KeyType, PayloadType>::purge_expired;
 
     public:
-        MapSet() : Map<KeyType, PayloadType>() { };
 
-        explicit MapSet(const std::string &name) : Map<KeyType, PayloadType>(name) { };
+        MapSet() : Map<KeyType, PayloadType>() {};
 
-        ~MapSet() { };
+        explicit MapSet(const std::string &name) : Map<KeyType, PayloadType>(name) {};
+
+        ~MapSet() {};
 
         bool add(const KeyType &k, const ValType &val, int expires = 0) {
             // add one or more members to a set
@@ -371,7 +374,8 @@ namespace shared_memory {
             }
             auto it = map_->find(k);
             if (it == map_->end()) {
-                MappedValType<PayloadType> mapped_val(expires_at, PrivateVoidAllocator(segment_->get_segment_manager()));
+                MappedValType<PayloadType> mapped_val(expires_at,
+                                                      PrivateVoidNodeAllocator(segment_->get_segment_manager()));
                 mapped_val.payload.insert(val);
                 auto ins_res = map_->insert(ValueType(k, mapped_val));
                 ++stats->write.insert.total;
@@ -409,7 +413,7 @@ namespace shared_memory {
             if (expires) {
                 expires_at = unix_now + expires;
             }
-            PrivateVoidAllocator alloc_inst(segment_->get_segment_manager());
+            PrivateVoidNodeAllocator alloc_inst(segment_->get_segment_manager());
             String k_(k.c_str(), alloc_inst);
             auto it = map_->find(k_);
             if (it == map_->end()) {
@@ -452,7 +456,7 @@ namespace shared_memory {
             if (expires) {
                 expires_at = unix_now + expires;
             }
-            PrivateVoidAllocator alloc_inst(segment_->get_segment_manager());
+            PrivateVoidNodeAllocator alloc_inst(segment_->get_segment_manager());
             String k_(k.c_str(), alloc_inst);
             String val_(val.c_str(), alloc_inst);
             auto it = map_->find(k_);
@@ -489,7 +493,7 @@ namespace shared_memory {
             return true;
         }
 
-        bool members(const KeyType &k, std::set<ValType> *val) {
+        bool members(const KeyType &k, std::set <ValType> *val) {
             auto it = map_->find(k);
             if (it != map_->end()) {
                 if ((*it).second.expires_at && (*it).second.expires_at < time(NULL)) {
@@ -514,8 +518,8 @@ namespace shared_memory {
         }
 
 
-        bool members(const std::string &k, std::set<ValType> *val) {
-            String k_(k.c_str(), PrivateVoidAllocator(segment_->get_segment_manager()));
+        bool members(const std::string &k, std::set <ValType> *val) {
+            String k_(k.c_str(), PrivateVoidNodeAllocator(segment_->get_segment_manager()));
             auto it = map_->find(k_);
             if (it != map_->end()) {
                 if ((*it).second.expires_at && (*it).second.expires_at < time(NULL)) {
@@ -540,8 +544,8 @@ namespace shared_memory {
             }
         }
 
-        bool members(const std::string &k, std::set<std::string> *val) {
-            String k_(k.c_str(), PrivateVoidAllocator(segment_->get_segment_manager()));
+        bool members(const std::string &k, std::set <std::string> *val) {
+            String k_(k.c_str(), PrivateVoidNodeAllocator(segment_->get_segment_manager()));
             auto it = map_->find(k_);
             if (it != map_->end()) {
                 if ((*it).second.expires_at && (*it).second.expires_at < time(NULL)) {
@@ -567,7 +571,7 @@ namespace shared_memory {
         }
 
         bool is_member(const std::string &k, const ValType val) {
-            String k_(k.c_str(), PrivateVoidAllocator(segment_->get_segment_manager()));
+            String k_(k.c_str(), PrivateVoidNodeAllocator(segment_->get_segment_manager()));
             auto it = map_->find(k_);
             if (it != map_->end()) {
                 if ((*it).second.expires_at && (*it).second.expires_at < time(NULL)) {
@@ -621,6 +625,6 @@ namespace shared_memory {
             }
         }
     };
-
 }
-#endif // SHARED_MAP_H
+
+#endif // SHMAPS_H

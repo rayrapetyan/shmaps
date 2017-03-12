@@ -4,15 +4,15 @@ namespace shared_memory {
 
     bip::managed_shared_memory *segment_ = nullptr;
 
-    PrivateVoidAllocator *seg_alloc = nullptr;
+    PrivateVoidNodeAllocator *seg_alloc = nullptr;
 
     long init(long size) {
         //std::cout << "shmem init" << std::endl;
         if (segment_ == nullptr) {
             segment_ = new bip::managed_shared_memory(bip::open_or_create, shmem_seg_name.c_str(), size);
-            assert (segment_ != nullptr);
-            seg_alloc = new PrivateVoidAllocator(segment_->get_segment_manager());
-            assert (seg_alloc != nullptr);
+            assert(segment_ != nullptr);
+            seg_alloc = new PrivateVoidNodeAllocator(segment_->get_segment_manager());
+            assert(seg_alloc != nullptr);
         }
         return segment_->get_size();
     }

@@ -1,4 +1,4 @@
-#include "shmaps.h"
+#include "./shmaps.h"
 
 namespace shmem = shared_memory;
 
