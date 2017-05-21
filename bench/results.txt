@@ -1,0 +1,23 @@
+Run on (1 X 3099.98 MHz CPU )
+2017-05-21 11:11:06
+-------------------------------------------------------------------------------------------
+Benchmark                                                    Time           CPU Iterations
+-------------------------------------------------------------------------------------------
+ShMapFixture/BM_ShMap_Set_IntInt                      11799946 ns   11779386 ns         57
+ShMapFixture/BM_ShMap_Get_IntInt                      12970361 ns   12657961 ns         51
+ShMapFixture/BM_ShMap_Set_IntFooStats                 12138499 ns   12127949 ns         59
+ShMapFixture/BM_ShMap_Get_IntFooStats                 12850117 ns   12827895 ns         57
+ShMapFixture/BM_ShMap_Set_StringInt                   50970606 ns   50822500 ns         14
+ShMapFixture/BM_ShMap_Get_StringInt                   47178982 ns   47121467 ns         15
+ShMapFixture/BM_ShMap_Set_StringFooStatsExt          640255302 ns  636313000 ns          1
+ShMapFixture/BM_ShMap_Get_StringFooStatsExt           54110066 ns   54024538 ns         13
+LibCuckooFixture/BM_LibCuckoo_Set_IntInt               6940419 ns    6927232 ns         99
+LibCuckooFixture/BM_LibCuckoo_Get_IntInt               8813931 ns    8795627 ns         75
+LibCuckooFixture/BM_LibCuckoo_Set_IntFooStats          7229798 ns    7206776 ns         98
+LibCuckooFixture/BM_LibCuckoo_Get_IntFooStats          9116169 ns    9097872 ns         78
+LibCuckooFixture/BM_LibCuckoo_Set_StringInt           43467263 ns   43237308 ns         13
+LibCuckooFixture/BM_LibCuckoo_Get_StringInt           44774776 ns   44687813 ns         16
+LibCuckooFixture/BM_LibCuckoo_Set_StringFooStatsExt   56579010 ns   56482167 ns         12
+LibCuckooFixture/BM_LibCuckoo_Get_StringFooStatsExt   44365044 ns   44199937 ns         16
+RedisFixture/BM_RedisSetString                      1994118908 ns  882750000 ns          1
+RedisFixture/BM_RedisGetString                      1989733576 ns  781317000 ns          1

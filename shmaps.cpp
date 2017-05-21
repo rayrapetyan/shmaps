@@ -6,8 +6,7 @@ namespace shared_memory {
 
     PrivateVoidNodeAllocator *seg_alloc = nullptr;
 
-    long init(long size) {
-        //std::cout << "shmem init" << std::endl;
+    uint64_t init(uint64_t size) {
         if (segment_ == nullptr) {
             segment_ = new bip::managed_shared_memory(bip::open_or_create, shmem_seg_name.c_str(), size);
             assert(segment_ != nullptr);
@@ -19,21 +18,14 @@ namespace shared_memory {
 
     void remove() {
         if (segment_ == nullptr) {
-            // segment was already destroyed from elsewhere
             return;
         }
-        /*
-        fprintf(stdout, "destroying shared memory segment of size %luMB (%luMB free)\n",
-                segment_->get_size() / 1000000, segment_->get_free_memory() / 1000000);
-        */
-
         bip::shared_memory_object::remove(shmem_seg_name.c_str());
         segment_ = nullptr;
         return;
     }
 
-    long grow(long add_size) {
-        std::cout << "shmem grow" << std::endl;
+    uint64_t grow(uint64_t add_size) {
         assert(segment_);
         uint cur_seg_size = segment_->get_size();
         delete segment_;
@@ -43,7 +35,7 @@ namespace shared_memory {
         return cur_seg_size + add_size;
     }
 
-    long size() {
+    uint64_t size() {
         assert(segment_);
         return segment_->get_size();
     }

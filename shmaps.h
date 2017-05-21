@@ -5,89 +5,75 @@
 #include <iostream>
 
 #include <boost/interprocess/managed_shared_memory.hpp>
-#include <boost/interprocess/sync/named_mutex.hpp>
-#include <boost/interprocess/sync/interprocess_sharable_mutex.hpp>
-#include <boost/interprocess/sync/named_sharable_mutex.hpp>
-#include <boost/unordered_map.hpp>
-#include <boost/unordered_set.hpp>
 #include <boost/utility.hpp>
 #include <boost/interprocess/detail/managed_memory_impl.hpp>
+#include <boost/interprocess/containers/list.hpp>
 #include <boost/interprocess/containers/set.hpp>
-#include <boost/interprocess/containers/map.hpp>
 #include <boost/interprocess/containers/string.hpp>
 #include <boost/interprocess/managed_shared_memory.hpp>
-#include <boost/interprocess/sync/interprocess_mutex.hpp>
 #include <boost/interprocess/allocators/private_node_allocator.hpp>
 #include <boost/interprocess/allocators/node_allocator.hpp>
+
+#include "./libcuckoo_mod/cuckoohash_map.hh"
 
 namespace bip = boost::interprocess;
 
 namespace shared_memory {
     typedef bip::managed_shared_memory::segment_manager SegmentManager;
-    typedef bip::allocator<void, SegmentManager> VoidAllocator;
-    typedef bip::node_allocator<void, SegmentManager> VoidNodeAllocator;
     typedef bip::private_node_allocator<void, SegmentManager> PrivateVoidNodeAllocator;
     typedef bip::private_node_allocator<char, SegmentManager> PrivateCharNodeAllocator;
     typedef bip::basic_string<char, std::char_traits<char>, PrivateCharNodeAllocator> String;
 
-    typedef bip::interprocess_mutex MutexType;
-    typedef bip::scoped_lock <MutexType> LockType;
-
-    //const uint shmem_seg_size = 1000000;
     const std::string shmem_seg_name = "SharedMemorySegment";
-    //static bip::managed_shared_memory *segment_ = new bip::managed_shared_memory(bip::open_or_create, shmem_seg_name.c_str(), shmem_seg_size);
     extern bip::managed_shared_memory *segment_;
     extern PrivateVoidNodeAllocator *seg_alloc;
 
-    const uint purge_min_recs = 100000;
-    const uint purge_recs = 2;
-    const uint purge_every = 1;
-    const uint purge_range = 10;
-
-    long init(long size);
+    uint64_t init(uint64_t size);
 
     void remove();
 
-    long grow(long add_size);
+    uint64_t grow(uint64_t add_size);
 
-    long size();
+    uint64_t size();
 
     struct Stats {
         struct {
             struct {
-                unsigned long long total;
-                unsigned long long expiring;
-                unsigned long long permanent;
+                std::atomic<uint64_t> total;
+                std::atomic<uint64_t> expiring;
+                std::atomic<uint64_t> permanent;
+                std::atomic<uint64_t> error;
             } insert;
             struct {
-                unsigned long long total;
-                unsigned long long hit;
-                unsigned long long miss;
+                std::atomic<uint64_t> total;
+                std::atomic<uint64_t> hit;
+                std::atomic<uint64_t> miss;
             } purge;
-            unsigned long long update;
+            std::atomic<uint64_t> update;
         } write;
 
         struct {
-            unsigned long long total;
-            unsigned long long hit;
-            unsigned long long miss;
+            std::atomic<uint64_t> total;
+            std::atomic<uint64_t> hit;
+            std::atomic<uint64_t> miss;
         } read;
 
         void info() {
             fprintf(stdout, "    stats\n"
-                            "        inserts: %llu (%d%% expiring)\n"
-                            "        updates: %llu\n"
-                            "        purges: %llu/%llu (%d%% hits)\n"
-                            "        reads: %llu/%llu (%d%% hits)\n",
-                    write.insert.total,
-                    write.insert.total ? static_cast<int>(write.insert.expiring * 100 / write.insert.total) : 0,
-                    write.update,
-                    write.purge.hit,
-                    write.purge.total,
-                    write.purge.total ? static_cast<int>(write.purge.hit * 100 / write.purge.total) : 0,
-                    read.hit,
-                    read.total,
-                    read.total ? static_cast<int>(read.hit * 100 / read.total) : 0);
+                            "        inserts: %lu (%lu%% expiring, %lu%% errors)\n"
+                            "        updates: %lu\n"
+                            "        purges: %lu/%lu (%lu%% hits)\n"
+                            "        reads: %lu/%lu (%lu%% hits)\n",
+                    write.insert.total.load(std::memory_order_acquire),
+                    write.insert.total ? static_cast<uint64_t>(write.insert.expiring * 100 / write.insert.total) : 0,
+                    write.insert.total ? static_cast<uint64_t>(write.insert.error * 100 / write.insert.total) : 0,
+                    write.update.load(std::memory_order_acquire),
+                    write.purge.hit.load(std::memory_order_acquire),
+                    write.purge.total.load(std::memory_order_acquire),
+                    write.purge.total ? static_cast<uint64_t>(write.purge.hit * 100 / write.purge.total) : 0,
+                    read.hit.load(std::memory_order_acquire),
+                    read.total.load(std::memory_order_acquire),
+                    read.total ? static_cast<uint64_t>(read.hit * 100 / read.total) : 0);
         }
     };
 
@@ -97,16 +83,44 @@ namespace shared_memory {
     public:
         MappedValType() {}
 
-        MappedValType(time_t expires_at, const PrivateVoidNodeAllocator &void_alloc) : payload(void_alloc),
-                                                                                       expires_at(expires_at) {}
+        MappedValType(std::chrono::seconds &ttl, const PrivateVoidNodeAllocator &void_alloc) :
+                payload_(void_alloc),
+                created_at_(std::chrono::steady_clock::now()),
+                ttl_(ttl) {}
 
-        MappedValType(const PayloadType &payload, const time_t &expires_at) : payload(payload),
-                                                                              expires_at(expires_at) {}
+        MappedValType(const PayloadType &payload, std::chrono::seconds &ttl) :
+                payload_(payload),
+                created_at_(std::chrono::steady_clock::now()),
+                ttl_(ttl) {}
 
         ~MappedValType() {}
 
-        PayloadType payload;
-        time_t expires_at;
+        bool expired() const {
+            return ttl_ != std::chrono::seconds(0) && (std::chrono::steady_clock::now() - created_at_ > ttl_);
+        }
+
+        void reset(const PayloadType &payload, std::chrono::seconds &ttl) {
+            reset(payload);
+            reset(ttl);
+        }
+
+        void reset(std::chrono::seconds &ttl) {
+            created_at_ = std::chrono::steady_clock::now();
+            ttl_ = ttl;
+        }
+
+        void reset(const PayloadType &payload) {
+            payload_ = payload;
+        }
+
+        PayloadType &payload() {
+            return payload_;
+        }
+
+    private:
+        PayloadType payload_;
+        std::chrono::time_point<std::chrono::steady_clock> created_at_;
+        std::chrono::seconds ttl_;
     };
 
 
@@ -115,28 +129,28 @@ namespace shared_memory {
 
     public:
         typedef std::pair<const KeyType, MappedValType<PayloadType> > ValueType;
-        typedef bip::private_node_allocator <ValueType, SegmentManager> PrivateValueTypeNodeAllocator;
-        typedef bip::node_allocator <ValueType, SegmentManager> ValueTypeNodeAllocator;
-        typedef bip::allocator <ValueType, SegmentManager> ValueTypeAllocator;
-        typedef bip::map <KeyType, MappedValType<PayloadType>, std::less<KeyType>, ValueTypeAllocator> MapImpl;  // #allocator
-        typedef typename MapImpl::iterator MapImplIterator;
+        typedef bip::private_node_allocator<ValueType, SegmentManager> PrivateValueTypeNodeAllocator;
+        typedef bip::node_allocator<ValueType, SegmentManager> ValueTypeNodeAllocator;
+        typedef bip::allocator<ValueType, SegmentManager> ValueTypeAllocator;
+        typedef std::hash<KeyType> HashFunc;
+        typedef std::equal_to<KeyType> EqFunc;
+        typedef cuckoohash_map<KeyType, MappedValType<PayloadType>, HashFunc, EqFunc, ValueTypeAllocator> MapImpl;
+        typedef typename MapImpl::locked_table::iterator MapImplLockTableIterator;
+        typedef typename MapImpl::locked_table MapImplLockTable;
 
         Map() {};
 
         explicit Map(const std::string &name) : map_name_(name) {
-            //std::cout << map_name_ << " ctor" << std::endl << std::flush;
-
             if (segment_ == nullptr) {
                 segment_ = new bip::managed_shared_memory(bip::open_only, shmem_seg_name.c_str());
             }
             assert(segment_ != nullptr);
             map_ = segment_->find_or_construct<MapImpl>(map_name_.data())(
-                    std::less<KeyType>(),
+                    LIBCUCKOO_DEFAULT_SIZE,
+                    HashFunc(),
+                    EqFunc(),
                     segment_->get_allocator<MappedValType<PayloadType>>());
-            //VoidNodeAllocator(segment_->get_segment_manager()));
             assert(map_ != nullptr);
-            mutex_ = segment_->find_or_construct<MutexType>(std::string(name + "mutex").data())();
-            assert(mutex_ != nullptr);
             stats = segment_->find_or_construct<Stats>(std::string(name + "stats").data())();
             assert(stats != nullptr);
 
@@ -144,19 +158,13 @@ namespace shared_memory {
         }
 
         ~Map() {
-            //std::cout << map_name_ << " dtor" << std::endl;
         }
-
-        MutexType &mutex() {
-            return *mutex_;
-        }
-
 
         void info() {
             fprintf(stdout, "shared memory segment of size %luMB (%luMB free)\n"
                             "    map %s (elements: %lu)\n",
-                    segment_->get_size() / 1000000,
-                    segment_->get_free_memory() / 1000000,
+                    segment_->get_size() / (1 * 1024 * 1024),
+                    segment_->get_free_memory() / (1 * 1024 * 1024),
                     map_name_.c_str(),
                     map_->size());
             stats->info();
@@ -168,144 +176,60 @@ namespace shared_memory {
                 // map was already destroyed from elsewhere, not a bug as segment_ is static
                 return;
             }
-
-            /*
-            fprintf(stdout, "removing map %s from segment of size %luMB (%luMB free)\n",
-                    map_name_.c_str(), segment_->get_size() / 1000000,
-                    segment_->get_free_memory() / 1000000);
-            */
-
-            segment_->destroy<MutexType>((map_name_ + "mutex").c_str());
             segment_->destroy<MapImpl>(map_name_.c_str());
             return;
         }
 
         void clear() {
-            LockType lock(*mutex_);
             map_->clear();
             return;
         }
 
-        bool set(const char *k, const PayloadType &val, bool create_only = true, int expires = 0) {
-            time_t unix_now = time(NULL), expires_at = 0;
-            if (expires) {
-                expires_at = unix_now + expires;
-            }
-            String k_(k, PrivateVoidNodeAllocator(segment_->get_segment_manager()));
-            auto it = map_->find(k_);
-            if (it == map_->end()) {
-                auto ins_res = map_->insert(ValueType(k_, MappedValType<PayloadType>(val, expires_at)));
-                ++stats->write.insert.total;
-                if (expires_at != 0) {
-                    ++stats->write.insert.expiring;
-                } else {
-                    ++stats->write.insert.permanent;
-                }
-                it = ins_res.first;
-            } else {
-                if ((*it).second.expires_at && ((*it).second.expires_at < unix_now)) { // expired
-                    (*it).second.payload = val;
-                    (*it).second.expires_at = expires_at;
+        bool set(const KeyType &k, const PayloadType &pl, bool create_only = true,
+                 std::chrono::seconds expires = std::chrono::seconds(0)) {
+            if (!map_->update_fn(k, [&](MappedValType<PayloadType> &val) {
+                if (val.expired()) {
+                    val.reset(pl, expires);
                     ++stats->write.insert.total;
-                    if (expires_at != 0) {
+                    if (expires != std::chrono::seconds(0)) {
                         ++stats->write.insert.expiring;
                     } else {
                         ++stats->write.insert.permanent;
                     }
                 } else {
-                    if (create_only)
-                        return false;
-                    (*it).second.payload = val;
-                    ++stats->write.update;
+                    if (!create_only) {
+                        val.reset(pl);
+                        ++stats->write.update;
+                    }
                 }
-            }
-            if (stats->write.insert.total % purge_every == 0) {
-                purge_expired(boost::next(it), purge_recs);
-            }
-            return true;
-        }
-
-        bool get(const char *k, PayloadType *val) {
-            String k_(k, PrivateVoidNodeAllocator(segment_->get_segment_manager()));
-            auto it = map_->find(k_);
-            if (it != map_->end()) {
-                if ((*it).second.expires_at && (*it).second.expires_at < time(NULL)) {
-                    map_->erase(it);
-                    ++stats->write.purge.total;
-                    ++stats->write.purge.hit;
-                    ++stats->read.total;
-                    ++stats->read.miss;
+            })) {
+                if (!map_->insert(k, MappedValType<PayloadType>(pl, expires))) {
+                    ++stats->write.insert.error;
                     return false;
                 }
-                *val = (*it).second.payload;
-                ++stats->read.total;
-                ++stats->read.hit;
-                return true;
-            } else {
-                ++stats->read.total;
-                ++stats->read.miss;
-                return false;
-            }
-        }
+                purge();
 
-        bool set(const KeyType &k, const PayloadType &val, bool create_only = true, int expires = 0) {
-            time_t unix_now = time(NULL), expires_at = 0;
-            if (expires) {
-                expires_at = unix_now + expires;
-            }
-            auto it = map_->find(k);
-            if (it == map_->end()) {
-                auto ins_res = map_->insert(ValueType(k, MappedValType<PayloadType>(val, expires_at)));
                 ++stats->write.insert.total;
-                if (expires_at != 0) {
+                if (expires != std::chrono::seconds(0)) {
                     ++stats->write.insert.expiring;
                 } else {
                     ++stats->write.insert.permanent;
                 }
-                it = ins_res.first;
-            } else {
-                if ((*it).second.expires_at && ((*it).second.expires_at < unix_now)) { // expired
-                    (*it).second.payload = val;
-                    (*it).second.expires_at = expires_at;
-                    ++stats->write.insert.total;
-                    if (expires_at != 0) {
-                        ++stats->write.insert.expiring;
-                    } else {
-                        ++stats->write.insert.permanent;
-                    }
-                } else {
-                    if (create_only)
-                        return false;
-                    (*it).second.payload = val;
-                    ++stats->write.update;
-                }
-            }
-            if (stats->write.insert.total % purge_every == 0) {
-                purge_expired(boost::next(it), purge_recs);
             }
             return true;
         }
 
-        bool get(const KeyType &k, PayloadType *val) {
-            auto it = map_->find(k);
-            if (it != map_->end()) {
-                if ((*it).second.expires_at && (*it).second.expires_at < time(NULL)) {
-                    map_->erase(it);
-                    ++stats->write.purge.total;
-                    ++stats->write.purge.hit;
-                    ++stats->read.total;
-                    ++stats->read.miss;
-                    return false;
+        bool get(const KeyType &k, PayloadType *pl) {
+            bool found = false;
+            map_->update_fn(k, [&](MappedValType<PayloadType> &val) {
+                found = !val.expired();
+                if (found) {
+                    *pl = val.payload();
                 }
-                *val = (*it).second.payload;
-                ++stats->read.total;
-                ++stats->read.hit;
-                return true;
-            } else {
-                ++stats->read.total;
-                ++stats->read.miss;
-                return false;
-            }
+            });
+            ++stats->read.total;
+            found ? ++stats->read.hit : ++stats->read.miss;
+            return found;
         }
 
         Stats *stats;
@@ -313,50 +237,33 @@ namespace shared_memory {
     protected:
         MapImpl *map_;
         std::string map_name_;
-        MutexType *mutex_;
 
-        void purge_expired(MapImplIterator it, const uint count) {
-            // tries to purge expired entries
-            // called on each successfull "set" and "add" with a current it + 1
-            // purge_expired(map_.begin(), map_.size()) will purge all expired records
-
-            if (map_->size() < purge_min_recs) {
+        void purge() {
+            /*
+            const uint purge_every = 1;
+            if (stats->write.insert.total % purge_every != 0)
                 return;
-            }
-
-            if (it == map_->end()) {
-                return;
-            }
-            time_t unix_now = time(NULL);
-            MapImplIterator cur_it = it;
-            uint del = 0;
-            for (int i = 0; (i < purge_range) && (del < count) && (cur_it != map_->end()); ++i) {
-                if ((*cur_it).second.expires_at < unix_now) {
-                    cur_it = map_->erase(cur_it);
-                    ++del;
-                    ++stats->write.purge.total;
-                    ++stats->write.purge.hit;
-                } else {
-                    ++stats->write.purge.total;
-                    ++stats->write.purge.miss;
-                    cur_it++;
-                }
-            }
+            */
+            const uint purge_elements = 2;
+            uint purged_elements = map_->erase_random_fn(purge_elements, [&](MappedValType<PayloadType> &val) {
+                ++stats->write.purge.total;
+                return val.expired();
+            });
+            stats->write.purge.hit += purged_elements;
             return;
         }
     };
 
-    template<class KeyType, class ValType>
-    class MapSet : public Map<KeyType, bip::set<ValType, std::less<ValType>,
-                   bip::private_node_allocator<ValType, SegmentManager>>> {
+    template<class KeyType, class SetValType>
+    class MapSet : public Map<KeyType, bip::set<SetValType, std::less<SetValType>,
+            bip::private_node_allocator<SetValType, SegmentManager>>> {
 
-        typedef bip::set <ValType, std::less<ValType>, bip::private_node_allocator<ValType, SegmentManager>> PayloadType;
+        typedef bip::set<SetValType, std::less<SetValType>, bip::private_node_allocator<SetValType, SegmentManager>> PayloadType;
 
-        using Map<KeyType, PayloadType>::mutex_;
         using Map<KeyType, PayloadType>::map_;
         using Map<KeyType, PayloadType>::stats;
         using ValueType = typename Map<KeyType, PayloadType>::ValueType;
-        using Map<KeyType, PayloadType>::purge_expired;
+        using Map<KeyType, PayloadType>::purge;
 
     public:
 
@@ -366,263 +273,66 @@ namespace shared_memory {
 
         ~MapSet() {};
 
-        bool add(const KeyType &k, const ValType &val, int expires = 0) {
+        bool add(const KeyType &k, const SetValType &pl_elem, std::chrono::seconds expires = std::chrono::seconds(0)) {
             // add one or more members to a set
-            time_t unix_now = time(NULL), expires_at = 0;
-            if (expires) {
-                expires_at = unix_now + expires;
-            }
-            auto it = map_->find(k);
-            if (it == map_->end()) {
-                MappedValType<PayloadType> mapped_val(expires_at,
-                                                      PrivateVoidNodeAllocator(segment_->get_segment_manager()));
-                mapped_val.payload.insert(val);
-                auto ins_res = map_->insert(ValueType(k, mapped_val));
-                ++stats->write.insert.total;
-                if (expires_at != 0) {
-                    ++stats->write.insert.expiring;
-                } else {
-                    ++stats->write.insert.permanent;
-                }
-                it = ins_res.first;
-            } else {
-                if ((*it).second.expires_at && ((*it).second.expires_at < unix_now)) { // expired
-                    (*it).second.payload.clear();
-                    (*it).second.payload.insert(val);
-                    (*it).second.expires_at = expires_at;
+            if (!map_->update_fn(k, [&](MappedValType<PayloadType> &val) {
+                if (val.expired()) {
+                    val.payload().clear();
+                    val.payload().insert(pl_elem);
+                    val.reset(expires);
                     ++stats->write.insert.total;
-                    if (expires_at != 0) {
+                    if (expires != std::chrono::seconds(0)) {
                         ++stats->write.insert.expiring;
                     } else {
                         ++stats->write.insert.permanent;
                     }
                 } else {
-                    (*it).second.payload.insert(val);
+                    val.payload().insert(pl_elem);
                     ++stats->write.update;
                 }
-            }
-            if (stats->write.insert.total % purge_every == 0) {
-                purge_expired(it, purge_recs);
-            }
-            return true;
-        }
+            })) {
+                MappedValType<PayloadType> val(expires,
+                                               PrivateVoidNodeAllocator(segment_->get_segment_manager()));
+                val.payload().insert(pl_elem);
+                if (!map_->insert(k, val)) {
+                    ++stats->write.insert.error;
+                    return false;
+                }
+                purge();
 
-        bool add(const std::string &k, const ValType val, int expires = 0) {
-            // add one or more members to a set
-            time_t unix_now = time(NULL), expires_at = 0;
-            if (expires) {
-                expires_at = unix_now + expires;
-            }
-            PrivateVoidNodeAllocator alloc_inst(segment_->get_segment_manager());
-            String k_(k.c_str(), alloc_inst);
-            auto it = map_->find(k_);
-            if (it == map_->end()) {
-                MappedValType<PayloadType> mapped_val(expires_at, alloc_inst);
-                mapped_val.payload.insert(val);
-                auto ins_res = map_->insert(ValueType(k_, mapped_val));
                 ++stats->write.insert.total;
-                if (expires_at != 0) {
+                if (expires != std::chrono::seconds(0)) {
                     ++stats->write.insert.expiring;
                 } else {
                     ++stats->write.insert.permanent;
                 }
-                it = ins_res.first;
-            } else {
-                if ((*it).second.expires_at && ((*it).second.expires_at < unix_now)) { // expired
-                    (*it).second.payload.clear();
-                    (*it).second.payload.insert(val);
-                    (*it).second.expires_at = expires_at;
-                    ++stats->write.insert.total;
-                    if (expires_at != 0) {
-                        ++stats->write.insert.expiring;
-                    } else {
-                        ++stats->write.insert.permanent;
-                    }
-                } else {
-                    (*it).second.payload.insert(val);
-                    ++stats->write.update;
-                }
-            }
-            if (stats->write.insert.total % purge_every == 0) {
-                purge_expired(it, purge_recs);
             }
             return true;
         }
 
-
-        bool add(const std::string &k, const std::string &val, int expires = 0) {
-            // add one or more members to a set
-            time_t unix_now = time(NULL), expires_at = 0;
-            if (expires) {
-                expires_at = unix_now + expires;
-            }
-            PrivateVoidNodeAllocator alloc_inst(segment_->get_segment_manager());
-            String k_(k.c_str(), alloc_inst);
-            String val_(val.c_str(), alloc_inst);
-            auto it = map_->find(k_);
-            if (it == map_->end()) {
-                MappedValType<PayloadType> mapped_val(expires_at, alloc_inst);
-                mapped_val.payload.insert(val_);
-                auto ins_res = map_->insert(ValueType(k_, mapped_val));
-                ++stats->write.insert.total;
-                if (expires_at != 0) {
-                    ++stats->write.insert.expiring;
-                } else {
-                    ++stats->write.insert.permanent;
-                }
-                it = ins_res.first;
-            } else {
-                if ((*it).second.expires_at && ((*it).second.expires_at < unix_now)) { // expired
-                    (*it).second.payload.clear();
-                    (*it).second.payload.insert(val_);
-                    (*it).second.expires_at = expires_at;
-                    ++stats->write.insert.total;
-                    if (expires_at != 0) {
-                        ++stats->write.insert.expiring;
-                    } else {
-                        ++stats->write.insert.permanent;
+        bool members(const KeyType &k, std::set<SetValType> *pl) {
+            bool found = false;
+            map_->update_fn(k, [&](MappedValType<PayloadType> &val) {
+                if (!val.expired()) {
+                    found = true;
+                    for (auto it = val.payload().begin(); it != val.payload().end(); ++it) {
+                        pl->insert((*it));
                     }
-                } else {
-                    (*it).second.payload.insert(val_);
-                    ++stats->write.update;
                 }
-            }
-            if (stats->write.insert.total % purge_every == 0) {
-                purge_expired(it, purge_recs);
-            }
-            return true;
+            });
+            ++stats->read.total;
+            found ? ++stats->read.hit : ++stats->read.miss;
+            return found;
         }
 
-        bool members(const KeyType &k, std::set <ValType> *val) {
-            auto it = map_->find(k);
-            if (it != map_->end()) {
-                if ((*it).second.expires_at && (*it).second.expires_at < time(NULL)) {
-                    map_->erase(it);
-                    ++stats->write.purge.total;
-                    ++stats->write.purge.hit;
-                    ++stats->read.total;
-                    ++stats->read.miss;
-                    return false;
-                }
-                for (auto it_ = (*it).second.payload.begin(); it_ != (*it).second.payload.end(); ++it_) {
-                    val->insert((*it_));
-                }
-                ++stats->read.total;
-                ++stats->read.hit;
-                return true;
-            } else {
-                ++stats->read.total;
-                ++stats->read.miss;
-                return false;
-            }
-        }
-
-
-        bool members(const std::string &k, std::set <ValType> *val) {
-            String k_(k.c_str(), PrivateVoidNodeAllocator(segment_->get_segment_manager()));
-            auto it = map_->find(k_);
-            if (it != map_->end()) {
-                if ((*it).second.expires_at && (*it).second.expires_at < time(NULL)) {
-                    map_->erase(it);
-                    ++stats->write.purge.total;
-                    ++stats->write.purge.hit;
-                    ++stats->read.total;
-                    ++stats->read.miss;
-                    return false;
-                }
-                //*val = (*it).second.payload;
-                for (auto it_ = (*it).second.payload.begin(); it_ != (*it).second.payload.end(); ++it_) {
-                    val->insert((*it_));
-                }
-                ++stats->read.total;
-                ++stats->read.hit;
-                return true;
-            } else {
-                ++stats->read.total;
-                ++stats->read.miss;
-                return false;
-            }
-        }
-
-        bool members(const std::string &k, std::set <std::string> *val) {
-            String k_(k.c_str(), PrivateVoidNodeAllocator(segment_->get_segment_manager()));
-            auto it = map_->find(k_);
-            if (it != map_->end()) {
-                if ((*it).second.expires_at && (*it).second.expires_at < time(NULL)) {
-                    map_->erase(it);
-                    ++stats->write.purge.total;
-                    ++stats->write.purge.hit;
-                    ++stats->read.total;
-                    ++stats->read.miss;
-                    return false;
-                }
-                //*val = (*it).second.payload;
-                for (auto it_ = (*it).second.payload.begin(); it_ != (*it).second.payload.end(); ++it_) {
-                    val->insert((*it_).c_str());
-                }
-                ++stats->read.total;
-                ++stats->read.hit;
-                return true;
-            } else {
-                ++stats->read.total;
-                ++stats->read.miss;
-                return false;
-            }
-        }
-
-        bool is_member(const std::string &k, const ValType val) {
-            String k_(k.c_str(), PrivateVoidNodeAllocator(segment_->get_segment_manager()));
-            auto it = map_->find(k_);
-            if (it != map_->end()) {
-                if ((*it).second.expires_at && (*it).second.expires_at < time(NULL)) {
-                    map_->erase(it);
-                    ++stats->write.purge.total;
-                    ++stats->write.purge.hit;
-                    ++stats->read.total;
-                    ++stats->read.miss;
-                    return false;
-                }
-                bool res = (*it).second.payload.find(val) != (*it).second.payload.end();
-                if (res) {
-                    ++stats->read.total;
-                    ++stats->read.hit;
-                } else {
-                    ++stats->read.total;
-                    ++stats->read.miss;
-                }
-                return res;
-            } else {
-                ++stats->read.total;
-                ++stats->read.miss;
-                return false;
-            }
-        }
-
-        bool is_member(const KeyType &k, const ValType val) {
-            auto it = map_->find(k);
-            if (it != map_->end()) {
-                if ((*it).second.expires_at && (*it).second.expires_at < time(NULL)) {
-                    map_->erase(it);
-                    ++stats->write.purge.total;
-                    ++stats->write.purge.hit;
-                    ++stats->read.total;
-                    ++stats->read.miss;
-                    return false;
-                }
-                bool res = (*it).second.payload.find(val) != (*it).second.payload.end();
-                if (res) {
-                    ++stats->read.total;
-                    ++stats->read.hit;
-                } else {
-                    ++stats->read.total;
-                    ++stats->read.miss;
-                }
-                return res;
-            } else {
-                ++stats->read.total;
-                ++stats->read.miss;
-                return false;
-            }
+        bool is_member(const KeyType &k, const SetValType pl_val) {
+            bool found = false;
+            map_->update_fn(k, [&](MappedValType<PayloadType> &val) {
+                found = !val.expired() && (val.payload().find(pl_val) != val.payload().end());
+            });
+            ++stats->read.total;
+            found ? ++stats->read.hit : ++stats->read.miss;
+            return found;
         }
     };
 }
