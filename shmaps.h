@@ -11,8 +11,7 @@
 #include <boost/interprocess/containers/set.hpp>
 #include <boost/interprocess/containers/string.hpp>
 #include <boost/interprocess/managed_shared_memory.hpp>
-#include <boost/interprocess/allocators/private_node_allocator.hpp>
-#include <boost/interprocess/allocators/node_allocator.hpp>
+#include <boost/interprocess/allocators/allocator.hpp>
 
 #include "./libcuckoo_mod/cuckoohash_map.hh"
 
@@ -20,13 +19,13 @@ namespace bip = boost::interprocess;
 
 namespace shared_memory {
     typedef bip::managed_shared_memory::segment_manager SegmentManager;
-    typedef bip::private_node_allocator<void, SegmentManager> PrivateVoidNodeAllocator;
-    typedef bip::private_node_allocator<char, SegmentManager> PrivateCharNodeAllocator;
-    typedef bip::basic_string<char, std::char_traits<char>, PrivateCharNodeAllocator> String;
+    typedef bip::allocator<void, SegmentManager> VoidAllocator;
+    typedef bip::allocator<char, SegmentManager> CharAllocator;
+    typedef bip::basic_string<char, std::char_traits<char>, CharAllocator> String;
 
     const std::string shmem_seg_name = "SharedMemorySegment";
     extern bip::managed_shared_memory *segment_;
-    extern PrivateVoidNodeAllocator *seg_alloc;
+    extern VoidAllocator *seg_alloc;
 
     uint64_t init(uint64_t size);
 
@@ -83,7 +82,7 @@ namespace shared_memory {
     public:
         MappedValType() {}
 
-        MappedValType(std::chrono::seconds &ttl, const PrivateVoidNodeAllocator &void_alloc) :
+        MappedValType(std::chrono::seconds &ttl, const VoidAllocator &void_alloc) :
                 payload_(void_alloc),
                 created_at_(std::chrono::steady_clock::now()),
                 ttl_(ttl) {}
@@ -129,14 +128,10 @@ namespace shared_memory {
 
     public:
         typedef std::pair<const KeyType, MappedValType<PayloadType> > ValueType;
-        typedef bip::private_node_allocator<ValueType, SegmentManager> PrivateValueTypeNodeAllocator;
-        typedef bip::node_allocator<ValueType, SegmentManager> ValueTypeNodeAllocator;
         typedef bip::allocator<ValueType, SegmentManager> ValueTypeAllocator;
         typedef std::hash<KeyType> HashFunc;
         typedef std::equal_to<KeyType> EqFunc;
         typedef cuckoohash_map<KeyType, MappedValType<PayloadType>, HashFunc, EqFunc, ValueTypeAllocator> MapImpl;
-        typedef typename MapImpl::locked_table::iterator MapImplLockTableIterator;
-        typedef typename MapImpl::locked_table MapImplLockTable;
 
         Map() {};
 
@@ -255,10 +250,9 @@ namespace shared_memory {
     };
 
     template<class KeyType, class SetValType>
-    class MapSet : public Map<KeyType, bip::set<SetValType, std::less<SetValType>,
-            bip::private_node_allocator<SetValType, SegmentManager>>> {
+    class MapSet : public Map<KeyType, bip::set<SetValType, std::less<SetValType>, bip::allocator<SetValType, SegmentManager>>> {
 
-        typedef bip::set<SetValType, std::less<SetValType>, bip::private_node_allocator<SetValType, SegmentManager>> PayloadType;
+        typedef bip::set<SetValType, std::less<SetValType>, bip::allocator<SetValType, SegmentManager>> PayloadType;
 
         using Map<KeyType, PayloadType>::map_;
         using Map<KeyType, PayloadType>::stats;
@@ -292,7 +286,7 @@ namespace shared_memory {
                 }
             })) {
                 MappedValType<PayloadType> val(expires,
-                                               PrivateVoidNodeAllocator(segment_->get_segment_manager()));
+                                               VoidAllocator(segment_->get_segment_manager()));
                 val.payload().insert(pl_elem);
                 if (!map_->insert(k, val)) {
                     ++stats->write.insert.error;
