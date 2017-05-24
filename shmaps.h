@@ -123,15 +123,12 @@ namespace shared_memory {
     };
 
 
-    template<class KeyType, class PayloadType>
+    template<class KeyType, class PayloadType, class Hash = std::hash<KeyType>, class Pred = std::equal_to<KeyType>>
     class Map {
-
     public:
         typedef std::pair<const KeyType, MappedValType<PayloadType> > ValueType;
         typedef bip::allocator<ValueType, SegmentManager> ValueTypeAllocator;
-        typedef std::hash<KeyType> HashFunc;
-        typedef std::equal_to<KeyType> EqFunc;
-        typedef cuckoohash_map<KeyType, MappedValType<PayloadType>, HashFunc, EqFunc, ValueTypeAllocator> MapImpl;
+        typedef cuckoohash_map<KeyType, MappedValType<PayloadType>, Hash, Pred, ValueTypeAllocator> MapImpl;
 
         Map() {};
 
@@ -142,8 +139,8 @@ namespace shared_memory {
             assert(segment_ != nullptr);
             map_ = segment_->find_or_construct<MapImpl>(map_name_.data())(
                     LIBCUCKOO_DEFAULT_SIZE,
-                    HashFunc(),
-                    EqFunc(),
+                    Hash(),
+                    Pred(),
                     segment_->get_allocator<MappedValType<PayloadType>>());
             assert(map_ != nullptr);
             stats = segment_->find_or_construct<Stats>(std::string(name + "stats").data())();
@@ -227,6 +224,20 @@ namespace shared_memory {
             return found;
         }
 
+        bool exists(const KeyType &k) {
+            bool found = false;
+            map_->find_fn(k, [&](const MappedValType<PayloadType> &val) {
+                found = !val.expired();
+            });
+            ++stats->read.total;
+            found ? ++stats->read.hit : ++stats->read.miss;
+            return found;
+        }
+
+        bool del(const KeyType &k) {
+            return map_->erase(k);
+        }
+
         Stats *stats;
 
     protected:
@@ -249,21 +260,19 @@ namespace shared_memory {
         }
     };
 
-    template<class KeyType, class SetValType>
-    class MapSet : public Map<KeyType, bip::set<SetValType, std::less<SetValType>, bip::allocator<SetValType, SegmentManager>>> {
-
+    template<class KeyType, class SetValType, class Hash = std::hash<KeyType>, class Pred = std::equal_to<KeyType>>
+    class MapSet : public Map<KeyType, bip::set<SetValType, std::less<SetValType>, bip::allocator<SetValType, SegmentManager>>, Hash, Pred> {
         typedef bip::set<SetValType, std::less<SetValType>, bip::allocator<SetValType, SegmentManager>> PayloadType;
-
-        using Map<KeyType, PayloadType>::map_;
-        using Map<KeyType, PayloadType>::stats;
-        using ValueType = typename Map<KeyType, PayloadType>::ValueType;
-        using Map<KeyType, PayloadType>::purge;
+        using Map<KeyType, PayloadType, Hash, Pred>::map_;
+        using Map<KeyType, PayloadType, Hash, Pred>::stats;
+        using ValueType = typename Map<KeyType, PayloadType, Hash, Pred>::ValueType;
+        using Map<KeyType, PayloadType, Hash, Pred>::purge;
 
     public:
 
-        MapSet() : Map<KeyType, PayloadType>() {};
+        MapSet() : Map<KeyType, PayloadType, Hash, Pred>() {};
 
-        explicit MapSet(const std::string &name) : Map<KeyType, PayloadType>(name) {};
+        explicit MapSet(const std::string &name) : Map<KeyType, PayloadType, Hash, Pred>(name) {};
 
         ~MapSet() {};
 
@@ -285,8 +294,7 @@ namespace shared_memory {
                     ++stats->write.update;
                 }
             })) {
-                MappedValType<PayloadType> val(expires,
-                                               VoidAllocator(segment_->get_segment_manager()));
+                MappedValType<PayloadType> val(expires, VoidAllocator(segment_->get_segment_manager()));
                 val.payload().insert(pl_elem);
                 if (!map_->insert(k, val)) {
                     ++stats->write.insert.error;
