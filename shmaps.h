@@ -245,10 +245,12 @@ namespace shared_memory {
         std::string map_name_;
 
         void purge() {
-            const uint purge_every = 2;
+            /*
+            const uint purge_every = 1;
             if (stats->write.insert.total % purge_every != 0)
                 return;
-            const uint purge_elements = 2;
+            */
+            const uint purge_elements = 4;
             uint purged_elements = map_->erase_random_fn(purge_elements, [&](MappedValType<PayloadType> &val) {
                 ++stats->write.purge.total;
                 return val.expired();

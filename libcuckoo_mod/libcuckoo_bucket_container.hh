@@ -222,10 +222,10 @@ public:
   // Moves data between two buckets in the container
   void moveKV(size_type dst_ind, size_type dst_slot, size_type src_ind,
               size_type src_slot) {
-    bucket &dst = buckets_[dst_ind];
+    //bucket &dst = buckets_[dst_ind];
     bucket &src = buckets_[src_ind];
     assert(src.occupied(src_slot));
-    assert(!dst.occupied(dst_slot));
+    //assert(!dst.occupied(dst_slot));
     setKV(dst_ind, dst_slot, src.partial(src_slot), src.movable_key(src_slot),
           std::move(src.mapped(src_slot)));
     // If this throws an exception, we cannot enforce the strong exception
