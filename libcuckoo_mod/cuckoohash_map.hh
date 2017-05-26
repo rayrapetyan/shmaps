@@ -14,7 +14,7 @@
 #include <iterator>
 #include <limits>
 #include <memory>
-#include <mutex>
+//#include <mutex>
 #include <stdexcept>
 #include <thread>
 #include <type_traits>
@@ -22,6 +22,7 @@
 #include <vector>
 #include <random>
 
+#include <boost/interprocess/sync/named_mutex.hpp>
 #include <boost/interprocess/offset_ptr.hpp>
 namespace bip = boost::interprocess;
 
@@ -124,7 +125,7 @@ public:
                  const key_equal &eql = key_equal(),
                  const allocator_type &alloc = allocator_type())
       : hash_fn_(hf), eq_fn_(eql), buckets_(reserve_calc(n), alloc),
-        locks_(bucket_count(), buckets_.get_allocator()), expansion_lock_(),
+        locks_(bucket_count(), buckets_.get_allocator()), expansion_lock_(bip::open_or_create, "cuckoohash"),
         minimum_load_factor_(LIBCUCKOO_DEFAULT_MINIMUM_LOAD_FACTOR),
         maximum_hashpower_(LIBCUCKOO_NO_MAXIMUM_HASHPOWER) {}
 
@@ -516,7 +517,7 @@ public:
       static std::mt19937_64 rnd_gen(rnd_dev());
 
       size_type buckets_size = buckets_.size();
-      if (buckets_size * slot_per_bucket() < LIBCUCKOO_DEFAULT_SIZE)
+      if (capacity() < LIBCUCKOO_DEFAULT_SIZE)
         return 0;
 
       std::uniform_int_distribution<uint64_t> dist_buckets(0, buckets_size - 1);
@@ -613,7 +614,7 @@ private:
   }
 
   // The type of the expansion lock
-  using expansion_lock_t = std::mutex;
+  using expansion_lock_t = bip::named_mutex;
 
   // Classes for managing locked buckets. By storing and moving around sets of
   // locked buckets in these classes, we can ensure that they are unlocked
@@ -1383,7 +1384,7 @@ private:
       return cuckoo_expand_simple<LOCK_T, AUTO_RESIZE>(current_hp + 1);
     }
     const size_type new_hp = current_hp + 1;
-    std::lock_guard<expansion_lock_t> l(expansion_lock_);
+    bip::scoped_lock<expansion_lock_t> l(expansion_lock_);
     cuckoo_status st = check_resize_validity<AUTO_RESIZE>(current_hp, new_hp);
     if (st != ok) {
       return st;

@@ -29,12 +29,12 @@ public:
     float rev;
 };
 
-class FooStatsExt {
+class FooStatsExtPlain {
 public:
-    FooStatsExt() {}
-    FooStatsExt(const int i1, const char *c1, const char *c2) :
+    FooStatsExtPlain() {}
+    FooStatsExtPlain(const int i1, const char *c1, const char *c2) :
             i1(i1), s1(c1), s2(c2) {}
-    ~FooStatsExt() {}
+    ~FooStatsExtPlain() {}
 
     int i1;
     std::string s1;

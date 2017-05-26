@@ -11,29 +11,27 @@ class ShMapFixture : public ::benchmark::Fixture {
 public:
     ShMapFixture() {
         //std::cout << "ShMapFixture ctor" << std::endl;
-
-        shmem::init(1 * 1024);
-        shmem::remove();
-
-        const long est_shmem_size = get_memory_size() / 12;
+        const long est_shmem_size = get_memory_size() / 10;
         if (shmem::init(est_shmem_size) != est_shmem_size) {
-            throw 1;
+            shmem::remove();
+            if (shmem::init(est_shmem_size) != est_shmem_size) {
+                throw 1;
+            }
         }
-
         shmap_int_int = new shmem::Map<int, int>("ShMapIntInt");
         shmap_int_foostats = new shmem::Map<int, FooStats>("ShMapIntFooStats");
-        shmap_string_foostats_ext = new shmem::Map<std::string, FooStatsExt>("ShMapStringFooStatsExt");
-        shmap_string_int = new shmem::Map<std::string, int>("ShMapStringInt");
+        shmap_string_foostats_ext = new shmem::Map<shmem::String, FooStatsExtShared>("ShMapStringFooStatsExt");
+        shmap_string_int = new shmem::Map<shmem::String, int>("ShMapStringInt");
 
-        shmap_string_set_int = new shmem::MapSet<std::string, int>("ShMapStringSetInt");
-        shmap_string_set_string = new shmem::MapSet<std::string, shmem::String>("ShMapStringSetString");
+        shmap_string_set_int = new shmem::MapSet<shmem::String, int>("ShMapStringSetInt");
+        shmap_string_set_string = new shmem::MapSet<shmem::String, shmem::String>("ShMapStringSetString");
     }
 
-    void SetUp() {
-        //std::cout << "ShMapFixture SetUp" << std::endl;
+    void SetUp(const ::benchmark::State &state) {
+        // std::cout << "ShMapFixture SetUp" << std::endl;
     }
 
-    void TearDown() {
+    void TearDown(const ::benchmark::State &state) {
         //std::cout << "ShMapFixture TearDown" << std::endl;
     }
 
@@ -58,16 +56,17 @@ public:
 
     shmem::Map<int, int> *shmap_int_int;
     shmem::Map<int, FooStats> *shmap_int_foostats;
-    shmem::Map<std::string, FooStatsExt> *shmap_string_foostats_ext;
-    shmem::Map<std::string, int> *shmap_string_int;
+    shmem::Map<shmem::String, FooStatsExtShared> *shmap_string_foostats_ext;
+    shmem::Map<shmem::String, int> *shmap_string_int;
 
-    shmem::MapSet<std::string, int> *shmap_string_set_int;
-    shmem::MapSet<std::string, shmem::String> *shmap_string_set_string;
+    shmem::MapSet<shmem::String, int> *shmap_string_set_int;
+    shmem::MapSet<shmem::String, shmem::String> *shmap_string_set_string;
 };
 
 BENCHMARK_F(ShMapFixture, BM_ShMap_Set_IntInt)(benchmark::State &st) {
     bool res;
     while (st.KeepRunning()) {
+        shmap_int_int->clear();
         for (int i = 0; i < el_num; ++i) {
             res = shmap_int_int->set(i, i, false, std::chrono::seconds(el_expires));
             assert(res);
@@ -75,20 +74,25 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_Set_IntInt)(benchmark::State &st) {
     }
 }
 
-BENCHMARK_F(ShMapFixture, BM_ShMap_Get_IntInt)(benchmark::State &st) {
+BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_IntInt)(benchmark::State &st) {
     bool res;
+    int val;
     while (st.KeepRunning()) {
+        shmap_int_int->clear();
         for (int i = 0; i < el_num; ++i) {
-            int val;
+            res = shmap_int_int->set(i, i, false, std::chrono::seconds(el_expires));
+            assert(res);
             res = shmap_int_int->get(i, &val);
-            assert(res && val.k == i);
+            assert(res && val == i);
         }
     }
 }
 
+
 BENCHMARK_F(ShMapFixture, BM_ShMap_Set_IntFooStats)(benchmark::State &st) {
     bool res;
     while (st.KeepRunning()) {
+        shmap_int_foostats->clear();
         for (int i = 0; i < el_num; ++i) {
             res = shmap_int_foostats->set(i, FooStats(i, 2, 3.0), false, std::chrono::seconds(el_expires));
             assert(res);
@@ -96,11 +100,14 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_Set_IntFooStats)(benchmark::State &st) {
     }
 }
 
-BENCHMARK_F(ShMapFixture, BM_ShMap_Get_IntFooStats)(benchmark::State &st) {
+BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_IntFooStats)(benchmark::State &st) {
     bool res;
+    FooStats fs;
     while (st.KeepRunning()) {
+        shmap_int_foostats->clear();
         for (int i = 0; i < el_num; ++i) {
-            FooStats fs;
+            res = shmap_int_foostats->set(i, FooStats(i, 2, 3.0), false, std::chrono::seconds(el_expires));
+            assert(res);
             res = shmap_int_foostats->get(i, &fs);
             assert(res && fs.k == i);
         }
@@ -110,8 +117,11 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_Get_IntFooStats)(benchmark::State &st) {
 BENCHMARK_F(ShMapFixture, BM_ShMap_Set_StringInt)(benchmark::State &st) {
     bool res;
     while (st.KeepRunning()) {
+        shmap_string_int->clear();
         for (int i = 0; i < el_num; ++i) {
-            std::string s = std::to_string(i).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+            shmem::String s(std::to_string(i).append(
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
+                            *shmem::seg_alloc);
             res = shmap_string_int->set(s,
                                         i,
                                         false,
@@ -122,13 +132,21 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_Set_StringInt)(benchmark::State &st) {
 
 }
 
-BENCHMARK_F(ShMapFixture, BM_ShMap_Get_StringInt)(benchmark::State &st) {
+BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_StringInt)(benchmark::State &st) {
     bool res;
+    int val;
     while (st.KeepRunning()) {
+        shmap_string_int->clear();
         for (int i = 0; i < el_num; ++i) {
-            int val;
-            std::string s = std::to_string(i).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-            res = shmap_string_int->get(s.c_str(), &val);
+            shmem::String s(std::to_string(i).append(
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
+                            *shmem::seg_alloc);
+            res = shmap_string_int->set(s,
+                                        i,
+                                        false,
+                                        std::chrono::seconds(el_expires));
+            assert(res);
+            res = shmap_string_int->get(s, &val);
             assert(res && val == i);
         }
     }
@@ -137,10 +155,13 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_Get_StringInt)(benchmark::State &st) {
 BENCHMARK_F(ShMapFixture, BM_ShMap_Set_StringFooStatsExt)(benchmark::State &st) {
     bool res;
     while (st.KeepRunning()) {
+        shmap_string_foostats_ext->clear();
         for (int i = 0; i < el_num; ++i) {
-            std::string s = std::to_string(i).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+            shmem::String s(std::to_string(i).append(
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
+                            *shmem::seg_alloc);
             res = shmap_string_foostats_ext->set(s,
-                                                 FooStatsExt(i, s.c_str(), s.c_str()),
+                                                 FooStatsExtShared(i, s.c_str(), s.c_str()),
                                                  false,
                                                  std::chrono::seconds(el_expires));
             assert(res);
@@ -149,14 +170,21 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_Set_StringFooStatsExt)(benchmark::State &st) 
 
 }
 
-BENCHMARK_F(ShMapFixture, BM_ShMap_Get_StringFooStatsExt)(benchmark::State &st) {
+BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_StringFooStatsExt)(benchmark::State &st) {
     bool res;
+    FooStatsExtShared fse;
     while (st.KeepRunning()) {
+        shmap_string_foostats_ext->clear();
         for (int i = 0; i < el_num; ++i) {
-            FooStatsExt fse;
-            std::string s = std::to_string(i).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-            res = shmap_string_foostats_ext->get(s.c_str(), &fse);
-            assert(res && (fse.i1 == i) && (std::string(fse.s1.c_str()) == s) && std::string(fse.s2.c_str()) == s);
+            shmem::String s(std::to_string(i).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
+                            *shmem::seg_alloc);
+            res = shmap_string_foostats_ext->set(s,
+                                                 FooStatsExtShared(i, s.c_str(), s.c_str()),
+                                                 false,
+                                                 std::chrono::seconds(el_expires));
+            assert(res);
+            res = shmap_string_foostats_ext->get(s, &fse);
+            assert(res && (fse.i1 == i) && (fse.s1 == s) && (fse.s2 == s));
         }
     }
 }

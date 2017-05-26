@@ -32,12 +32,12 @@ public:
     float rev;
 };
 
-class FooStatsExt {
+class FooStatsExtShared {
 public:
-    FooStatsExt() : s1(*shmem::seg_alloc), s2(*shmem::seg_alloc) {}
-    FooStatsExt(const int i1, const char *c1, const char *c2) :
+    FooStatsExtShared() : s1(*shmem::seg_alloc), s2(*shmem::seg_alloc) {}
+    FooStatsExtShared(const int i1, const char *c1, const char *c2) :
             i1(i1), s1(c1, *shmem::seg_alloc), s2(c2, *shmem::seg_alloc) {}
-    ~FooStatsExt() {}
+    ~FooStatsExtShared() {}
 
     int i1;
     shmem::String s1;

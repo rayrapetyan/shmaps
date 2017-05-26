@@ -123,7 +123,7 @@ namespace shared_memory {
     };
 
 
-    template<class KeyType, class PayloadType, class Hash = std::hash<KeyType>, class Pred = std::equal_to<KeyType>>
+    template<class KeyType, class PayloadType, class Hash = boost::hash<KeyType>, class Pred = std::equal_to<KeyType>>
     class Map {
     public:
         typedef std::pair<const KeyType, MappedValType<PayloadType> > ValueType;
@@ -245,11 +245,9 @@ namespace shared_memory {
         std::string map_name_;
 
         void purge() {
-            /*
-            const uint purge_every = 1;
+            const uint purge_every = 2;
             if (stats->write.insert.total % purge_every != 0)
                 return;
-            */
             const uint purge_elements = 2;
             uint purged_elements = map_->erase_random_fn(purge_elements, [&](MappedValType<PayloadType> &val) {
                 ++stats->write.purge.total;
@@ -260,7 +258,7 @@ namespace shared_memory {
         }
     };
 
-    template<class KeyType, class SetValType, class Hash = std::hash<KeyType>, class Pred = std::equal_to<KeyType>>
+    template<class KeyType, class SetValType, class Hash = boost::hash<KeyType>, class Pred = std::equal_to<KeyType>>
     class MapSet : public Map<KeyType, bip::set<SetValType, std::less<SetValType>, bip::allocator<SetValType, SegmentManager>>, Hash, Pred> {
         typedef bip::set<SetValType, std::less<SetValType>, bip::allocator<SetValType, SegmentManager>> PayloadType;
         using Map<KeyType, PayloadType, Hash, Pred>::map_;

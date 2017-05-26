@@ -11,6 +11,7 @@ Also this implementation is magnitude times faster than previous (using boost un
 It also consumes much less memory.
 - refactored expiration logic (std::chrono is used for all timing operations)
 - added bench and tests
+- note you can't use any data types allocating memory as keys or in values (e.g. you can't use std::string, but you can use shmem::String)
 
 
 ## Compilation
@@ -39,13 +40,14 @@ You should add shmaps.cpp and shmaps.h into your sources tree.
     const int el_expires = 2;
     bool res;
     int k = 100;
-    std::string sk = std::to_string(k);
+    int val;
+    FooStatsExt fse;
+    shmem::String sk(std::to_string(k).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
+                    *shmem::seg_alloc);
     
-    shmem::Map<std::string, int> *shmap_string_int = new shmem::Map<std::string, int>("ShMap_String_Int");
+    shmem::Map<shmem::String, int> *shmap_string_int = new shmem::Map<shmem::String, int>("ShMap_String_Int");
     res = shmap_string_int->set(sk, k, el_expires);
     assert(res);
-    
-    int val;
     res = shmap_string_int->get(sk, &val);
     assert(res && val == k);
 ```
@@ -55,7 +57,10 @@ You should add shmaps.cpp and shmaps.h into your sources tree.
     const int el_expires = 2;
     bool res;
     int k = 100;
-    std::string sk = std::to_string(k);
+    int val;
+    FooStatsExt fse;
+    shmem::String sk(std::to_string(k).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
+                    *shmem::seg_alloc);
     
     class FooStats {
     public:
@@ -77,18 +82,20 @@ You should add shmaps.cpp and shmaps.h into your sources tree.
     shmem::Map<int, FooStats> *shmap_int_foostats = new shmem::Map<int, FooStats>("ShMap_Int_FooStats");
     res = shmap_int_foostats->set(k, FooStats(k, 2, 3.0), false, std::chrono::seconds(el_expires));
     assert(res);
-    
     FooStats fs;
     res = shmap_int_foostats->get(k, &fs);
     assert(res && fs.k == k);
 ```
 
-## Example 3: shared map of advanced structs (containing std::string-s):
+## Example 3: shared map of advanced structs (containing shmem::String-s):
 ```
     const int el_expires = 2;
     bool res;
     int k = 100;
-    std::string sk = std::to_string(k);
+    int val;
+    FooStatsExt fse;
+    shmem::String sk(std::to_string(k).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
+                    *shmem::seg_alloc);
     
     class FooStatsExt {
     public:
@@ -102,51 +109,51 @@ You should add shmaps.cpp and shmaps.h into your sources tree.
         shmem::String s2;
     };
     
-    shmem::Map <std::string, FooStatsExt> *shmap_string_foostats_ext = new shmem::Map<std::string, FooStatsExt>(
-                "ShMap_String_FooStatsExt");
+    shmem::Map <shmem::String, FooStatsExt> *shmap_string_foostats_ext = new shmem::Map<shmem::String, FooStatsExt>(
+            "ShMap_String_FooStatsExt");
     res = shmap_string_foostats_ext->set(sk,
                                          FooStatsExt(k, sk.c_str(), sk.c_str()),
                                          false,
                                          std::chrono::seconds(el_expires));
     assert(res);
-    
-    FooStatsExt fse;
     res = shmap_string_foostats_ext->get(sk, &fse);
-    assert(res && (fse.i1 == k) && (std::string(fse.s1.c_str()) == sk) && std::string(fse.s2.c_str()) == sk);
+    assert(res && (fse.i1 == k) && (fse.s1 == sk) && (fse.s2 == sk));
 ```
 
-## Example 4: shared map of basic sets (`std::set<int>`):
+## Example 4: shared map of basic sets (`bip::set<int>`):
 ```
     const int el_expires = 2;
     bool res;
     int k = 100;
-    std::string sk = std::to_string(k);
+    int val;
+    FooStatsExt fse;
+    shmem::String sk(std::to_string(k).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
+                    *shmem::seg_alloc);
     
-    shmem::MapSet<std::string, int> *shmap_string_set_int = new shmem::MapSet<std::string, int>("ShMap_String_SetInt");
+    shmem::MapSet<shmem::String, int> *shmap_string_set_int = new shmem::MapSet<shmem::String, int>("ShMap_String_SetInt");
     res = shmap_string_set_int->add(sk, k);
     assert(res);
-    
     res = shmap_string_set_int->is_member(sk, k);
     assert(res);
-    
     std::set<int> res_check1 = {k};
     std::set<int> si;
     res = shmap_string_set_int->members(sk, &si);
     assert(res && si == res_check1);
 ```
 
-## Example 5: shared map of advanced sets (`std::set<std::string>`):
+## Example 5: shared map of advanced sets (`bip::set<shmem::String>`):
 ```
     const int el_expires = 2;
     bool res;
     int k = 100;
-    std::string sk = std::to_string(k);
+    int val;
+    FooStatsExt fse;
+    shmem::String sk(std::to_string(k).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
+                    *shmem::seg_alloc);
     
-    shmem::MapSet <std::string, shmem::String> *shmap_string_set_string =
-            new shmem::MapSet<std::string, shmem::String>("ShMap_String_SetString");
+    shmem::MapSet <shmem::String, shmem::String> *shmap_string_set_string = new shmem::MapSet<shmem::String, shmem::String>("ShMap_String_SetString");
     res = shmap_string_set_string->add(sk, shmem::String(sk.c_str(), *shmem::seg_alloc), std::chrono::seconds(el_expires));
     assert(res);
-    
     std::set<shmem::String> res_check2 = {shmem::String(sk.c_str(), *shmem::seg_alloc)};
     std::set<shmem::String> ss;
     res = shmap_string_set_string->members(sk, &ss);
