@@ -53,12 +53,11 @@ int main(int argc, char *argv[]) {
     int val;
     FooStatsExt fse;
     shmem::String sk(std::to_string(k).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
-                    *shmem::seg_alloc);
+                     *shmem::seg_alloc);
 
     shmem::Map<shmem::String, int> *shmap_string_int = new shmem::Map<shmem::String, int>("ShMap_String_Int");
     res = shmap_string_int->set(sk, k, el_expires);
     assert(res);
-
     res = shmap_string_int->get(sk, &val);
     assert(res && val == k);
 
@@ -69,18 +68,18 @@ int main(int argc, char *argv[]) {
     res = shmap_int_foostats->get(k, &fs);
     assert(res && fs.k == k);
 
-    shmem::Map <shmem::String, FooStatsExt> *shmap_string_foostats_ext = new shmem::Map<shmem::String, FooStatsExt>(
-            "ShMap_String_FooStatsExt");
+    shmem::Map <shmem::String, FooStatsExt> *shmap_string_foostats_ext =
+            new shmem::Map<shmem::String, FooStatsExt>("ShMap_String_FooStatsExt");
     res = shmap_string_foostats_ext->set(sk,
                                          FooStatsExt(k, sk.c_str(), sk.c_str()),
                                          false,
                                          std::chrono::seconds(el_expires));
     assert(res);
-
     res = shmap_string_foostats_ext->get(sk, &fse);
     assert(res && (fse.i1 == k) && (fse.s1 == sk) && (fse.s2 == sk));
 
-    shmem::MapSet<shmem::String, int> *shmap_string_set_int = new shmem::MapSet<shmem::String, int>("ShMap_String_SetInt");
+    shmem::MapSet<shmem::String, int> *shmap_string_set_int =
+            new shmem::MapSet<shmem::String, int>("ShMap_String_SetInt");
     res = shmap_string_set_int->add(sk, k);
     assert(res);
     res = shmap_string_set_int->is_member(sk, k);
@@ -90,16 +89,18 @@ int main(int argc, char *argv[]) {
     res = shmap_string_set_int->members(sk, &si);
     assert(res && si == res_check1);
 
-    shmem::MapSet <shmem::String, shmem::String> *shmap_string_set_string = new shmem::MapSet<shmem::String, shmem::String>("ShMap_String_SetString");
-    res = shmap_string_set_string->add(sk, shmem::String(sk.c_str(), *shmem::seg_alloc), std::chrono::seconds(el_expires));
+    shmem::MapSet <shmem::String, shmem::String> *shmap_string_set_string =
+            new shmem::MapSet<shmem::String, shmem::String>("ShMap_String_SetString");
+    res = shmap_string_set_string->add(sk, shmem::String(sk.c_str(), *shmem::seg_alloc),
+                                       std::chrono::seconds(el_expires));
     assert(res);
     std::set<shmem::String> res_check2 = {shmem::String(sk.c_str(), *shmem::seg_alloc)};
     std::set<shmem::String> ss;
     res = shmap_string_set_string->members(sk, &ss);
     assert(res && ss == res_check2);
 
-    shmem::Map<uint64_t, uint64_t> *shmap_stress = new shmem::Map<uint64_t, uint64_t>("ShMap_Stress");
-    shmem::Map<uint64_t, FooStatsExt> *shmapset_stress = new shmem::Map<uint64_t, FooStatsExt>("ShMapSet_Stress");
+    shmem::Map <uint64_t, uint64_t> *shmap_stress = new shmem::Map<uint64_t, uint64_t>("ShMap_Stress");
+    shmem::Map <uint64_t, FooStatsExt> *shmapset_stress = new shmem::Map<uint64_t, FooStatsExt>("ShMapSet_Stress");
 
     unsigned int wrk = 4;
     std::cout << "worker " << wrk << " created" << std::endl;
@@ -119,24 +120,17 @@ int main(int argc, char *argv[]) {
     uint64_t rnd_k;
     uint64_t val_stress;
 
-    for (uint64_t kstress=0; kstress < 500000; ++kstress) {
+    for (uint64_t kstress = 0; kstress < 500000; ++kstress) {
         rnd_k = dist_keys(rnd_gen);
         res = shmap_stress->set(rnd_k, kstress, true, std::chrono::seconds(el_expires));
-
         res = shmap_stress->get(rnd_k, &val_stress);
-
-
-        shmem::String s(std::to_string(kstress).append(
-                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
-                        *shmem::seg_alloc);
+        std::string s(std::to_string(kstress).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
         res = shmapset_stress->set(rnd_k,
-                                             FooStatsExt(kstress, s.c_str(), s.c_str()),
-                                             false,
-                                             std::chrono::seconds(el_expires));
-
+                                   FooStatsExt(kstress, s.c_str(), s.c_str()),
+                                   false,
+                                   std::chrono::seconds(el_expires));
         res = shmapset_stress->get(rnd_k, &fse);
-
-        if (kstress % 100000 == 0)
+        if (kstress % 10000 == 0)
             std::cout << kstress << std::endl;
     }
     shmap_stress->info();
