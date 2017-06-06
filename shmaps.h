@@ -35,6 +35,8 @@ namespace shared_memory {
 
     uint64_t size();
 
+    uint64_t get_memory_size();
+
     struct Stats {
         struct {
             struct {
@@ -134,7 +136,7 @@ namespace shared_memory {
 
         explicit Map(const std::string &name) : map_name_(name) {
             if (segment_ == nullptr) {
-                segment_ = new bip::managed_shared_memory(bip::open_only, shmem_seg_name.c_str());
+                init(get_memory_size());
             }
             assert(segment_ != nullptr);
             map_ = segment_->find_or_construct<MapImpl>(map_name_.data())(

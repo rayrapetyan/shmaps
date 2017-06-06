@@ -39,4 +39,10 @@ namespace shared_memory {
         assert(segment_);
         return segment_->get_size();
     }
+
+    uint64_t get_memory_size() {
+        long pages = sysconf(_SC_PHYS_PAGES);
+        long page_size = sysconf(_SC_PAGE_SIZE);
+        return pages * page_size;
+    }
 }

@@ -39,10 +39,8 @@ public:
 
 int main(int argc, char *argv[]) {
     const uint64_t est_shmem_size = 1024 * 1024 * 800; // XMB
-
     shmem::init(1 * 1024);
     shmem::remove();
-
     if (shmem::init(est_shmem_size) != est_shmem_size) {
         return 1;
     }
@@ -51,8 +49,9 @@ int main(int argc, char *argv[]) {
     bool res;
     int k = 100;
     int val;
+    const std::string long_str= "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     FooStatsExt fse;
-    shmem::String sk(std::to_string(k).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
+    shmem::String sk(std::to_string(k).append(long_str).c_str(),
                      *shmem::seg_alloc);
 
     shmem::Map<shmem::String, int> *shmap_string_int = new shmem::Map<shmem::String, int>("ShMap_String_Int");
@@ -124,7 +123,7 @@ int main(int argc, char *argv[]) {
         rnd_k = dist_keys(rnd_gen);
         res = shmap_stress->set(rnd_k, kstress, true, std::chrono::seconds(el_expires));
         res = shmap_stress->get(rnd_k, &val_stress);
-        std::string s(std::to_string(kstress).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        std::string s(std::to_string(kstress).append(long_str));
         res = shmapset_stress->set(rnd_k,
                                    FooStatsExt(kstress, s.c_str(), s.c_str()),
                                    false,
