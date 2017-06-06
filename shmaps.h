@@ -135,8 +135,14 @@ namespace shared_memory {
         Map() {};
 
         explicit Map(const std::string &name) : map_name_(name) {
+            const uint64_t est_shmem_size = get_memory_size() / 1.01;
             if (segment_ == nullptr) {
-                init(get_memory_size());
+                if (init(est_shmem_size) != est_shmem_size) {
+                    remove();
+                    if (init(est_shmem_size) != est_shmem_size) {
+                        abort();
+                    }
+                }
             }
             assert(segment_ != nullptr);
             map_ = segment_->find_or_construct<MapImpl>(map_name_.data())(
