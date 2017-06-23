@@ -45,6 +45,17 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+    unsigned int wrk = 4;
+    std::cout << "worker " << wrk << " created" << std::endl;
+
+    while (--wrk) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            std::cout << "worker " << wrk << " created" << std::endl;
+            break;
+        }
+    }
+
     const int el_expires = 2;
     bool res;
     int k = 100;
@@ -100,17 +111,6 @@ int main(int argc, char *argv[]) {
 
     shmem::Map <uint64_t, uint64_t> *shmap_stress = new shmem::Map<uint64_t, uint64_t>("ShMap_Stress");
     shmem::Map <uint64_t, FooStatsExt> *shmapset_stress = new shmem::Map<uint64_t, FooStatsExt>("ShMapSet_Stress");
-
-    unsigned int wrk = 4;
-    std::cout << "worker " << wrk << " created" << std::endl;
-
-    while (--wrk) {
-        pid_t pid = fork();
-        if (pid == 0) {
-            std::cout << "worker " << wrk << " created" << std::endl;
-            break;
-        }
-    }
 
     std::random_device rnd_dev;
     std::mt19937_64 rnd_gen(rnd_dev());

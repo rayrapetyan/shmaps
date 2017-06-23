@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cassert>
 #include <cstddef>
+#include <iostream>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -19,11 +20,11 @@
  *
  * @tparam Key type of keys in the table
  * @tparam T type of values in the table
- * @tparam Alloc type of key-value pair allocator
+ * @tparam Allocator type of key-value pair allocator
  * @tparam Partial type of partial keys
  * @tparam SLOT_PER_BUCKET number of slots for each bucket in the table
  */
-template <class Key, class T, class Alloc, class Partial,
+template <class Key, class T, class Allocator, class Partial,
           std::size_t SLOT_PER_BUCKET>
 class libcuckoo_bucket_container {
 public:
@@ -32,8 +33,8 @@ public:
   using value_type = std::pair<const Key, T>;
 
 private:
-  using traits_ =
-      typename std::allocator_traits<Alloc>::template rebind_traits<value_type>;
+  using traits_ = typename std::allocator_traits<
+      Allocator>::template rebind_traits<value_type>;
 
 public:
   using allocator_type = typename traits_::allocator_type;
@@ -41,8 +42,8 @@ public:
   using size_type = std::size_t;
   using reference = value_type &;
   using const_reference = const value_type &;
-  using pointer = value_type *;
-  using const_pointer = const value_type *;
+  using pointer = bip::offset_ptr<value_type>;
+  using const_pointer = const bip::offset_ptr<value_type>;
 
   /*
    * The bucket type holds SLOT_PER_BUCKET key-value pairs, along with their
@@ -147,8 +148,7 @@ public:
 
   libcuckoo_bucket_container &operator=(const libcuckoo_bucket_container &bc) {
     destroy_buckets();
-    libcuckoo_copy_allocator(
-        allocator_, bc.allocator_,
+    copy_allocator(allocator_, bc.allocator_,
         typename traits_::propagate_on_container_copy_assignment());
     bucket_allocator_ = allocator_;
     hashpower(bc.hashpower());
@@ -163,11 +163,10 @@ public:
   }
 
   void swap(libcuckoo_bucket_container &bc) noexcept {
-    libcuckoo_swap_allocator(allocator_, bc.allocator_,
+    swap_allocator(allocator_, bc.allocator_,
                              typename traits_::propagate_on_container_swap());
-    libcuckoo_swap_allocator(bucket_allocator_, bc.bucket_allocator_,
-                           typename traits_::propagate_on_container_swap());
-    //bucket_allocator_ = allocator_;
+    swap_allocator(bucket_allocator_, bc.bucket_allocator_,
+                   typename traits_::propagate_on_container_swap());
     // Regardless of whether we actually swapped the allocators or not, it will
     // always be okay to do the remainder of the swap. This is because if the
     // allocators were swapped, then the subsequent operations are okay. If the
@@ -219,20 +218,6 @@ public:
     traits_::destroy(allocator_, std::addressof(b.storage_kvpair(slot)));
   }
 
-  // Moves data between two buckets in the container
-  void moveKV(size_type dst_ind, size_type dst_slot, size_type src_ind,
-              size_type src_slot) {
-    //bucket &dst = buckets_[dst_ind];
-    bucket &src = buckets_[src_ind];
-    assert(src.occupied(src_slot));
-    //assert(!dst.occupied(dst_slot));
-    setKV(dst_ind, dst_slot, src.partial(src_slot), src.movable_key(src_slot),
-          std::move(src.mapped(src_slot)));
-    // If this throws an exception, we cannot enforce the strong exception
-    // guarantee, but otherwise we do
-    eraseKV(src_ind, src_slot);
-  }
-
   // Destroys all the live data in the buckets
   void clear() noexcept {
     static_assert(
@@ -250,18 +235,23 @@ public:
     }
   }
 
+private:
   // Creates a new container of hashpower `new_hp`, transfers the old data into
+  template <typename A>
+  void copy_allocator(A &dst, const A &src, std::true_type) {
+    dst = src;
+  }
   // it, and destroys the old container. Will not shrink the container.
-  void resize(size_type new_hp) {
-    assert(new_hp >= hashpower());
-    bip::offset_ptr<bucket> new_buckets = transfer(new_hp, *this, std::true_type());
-    destroy_buckets();
-    buckets_ = new_buckets;
-    hashpower(new_hp);
-    hashpower_ = new_hp;
+  template <typename A>
+  void copy_allocator(A &dst, const A &src, std::false_type) {}
+
+  // true here means the allocators from `src` are propagated on libcuckoo_swap
+  template <typename A> void swap_allocator(A &dst, A &src, std::true_type) {
+    std::swap(dst, src);
   }
 
-private:
+  template <typename A> void swap_allocator(A &dst, A &src, std::false_type) {}
+
   // true here means the bucket allocator should be propagated
   void move_assign(libcuckoo_bucket_container &src, std::true_type) {
     allocator_ = std::move(src.allocator_);
@@ -347,6 +337,38 @@ private:
   // These buckets are protected by striped locks (external to the
   // BucketContainer), which must be obtained before accessing a bucket.
   bip::offset_ptr<bucket> buckets_;
+
+  // If the key and value are Trivial, the bucket be serilizable. Since we
+  // already disallow user-specialized instances of std::pair, we know that the
+  // default implementation of std::pair uses a default copy constructor, so
+  // this should be okay. We could in theory just check if the type is
+  // TriviallyCopyable but this check is not available on some compilers we
+  // want to support.
+  template <typename Bogus = void *>
+  friend typename std::enable_if<sizeof(Bogus) && std::is_trivial<Key>::value &&
+                                     std::is_trivial<T>::value,
+                                 std::ostream &>::type
+  operator<<(std::ostream &os, const libcuckoo_bucket_container &bc) {
+    size_type hp = bc.hashpower();
+    os.write(reinterpret_cast<const char *>(&hp), sizeof(size_type));
+    os.write(reinterpret_cast<const char *>(bc.buckets_),
+             sizeof(bucket) * bc.size());
+    return os;
+  }
+
+  template <typename Bogus = void *>
+  friend typename std::enable_if<sizeof(Bogus) && std::is_trivial<Key>::value &&
+                                     std::is_trivial<T>::value,
+                                 std::istream &>::type
+  operator>>(std::istream &is, libcuckoo_bucket_container &bc) {
+    size_type hp;
+    is.read(reinterpret_cast<char *>(&hp), sizeof(size_type));
+    libcuckoo_bucket_container new_bc(hp, bc.get_allocator());
+    is.read(reinterpret_cast<char *>(new_bc.buckets_),
+            new_bc.size() * sizeof(bucket));
+    bc.swap(new_bc);
+    return is;
+  }
 };
 
 #endif // LIBCUCKOO_BUCKET_CONTAINER_H

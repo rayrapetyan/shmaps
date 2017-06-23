@@ -17,12 +17,6 @@ constexpr size_t LIBCUCKOO_DEFAULT_SIZE =
 //! is the least granular, meaning the array is a contiguous array and thus
 //! offers the best performance but the greatest memory overhead. 16 is the most
 //! granular, offering the least memory overhead but worse performance.
-constexpr size_t LIBCUCKOO_DEFAULT_LOCK_ARRAY_GRANULARITY = 0;
-
-//! The default minimum load factor that the table allows for automatic
-//! expansion. It must be a number between 0.0 and 1.0. The table will throw
-//! libcuckoo_load_factor_too_low if the load factor falls below this value
-//! during an automatic expansion.
 constexpr double LIBCUCKOO_DEFAULT_MINIMUM_LOAD_FACTOR = 0.05;
 
 //! An alias for the value that sets no limit on the maximum hashpower. If this

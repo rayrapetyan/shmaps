@@ -15,6 +15,12 @@
 
 #include "./libcuckoo_mod/cuckoohash_map.hh"
 
+#ifdef NDEBUG
+    #define SHMEM_SIZE_DIV 1.0622
+#else
+    #define SHMEM_SIZE_DIV 10.0622
+#endif
+
 namespace bip = boost::interprocess;
 
 namespace shared_memory {
@@ -135,7 +141,7 @@ namespace shared_memory {
         Map() {};
 
         explicit Map(const std::string &name) : map_name_(name) {
-            const uint64_t est_shmem_size = get_memory_size() / 1.01;
+            const uint64_t est_shmem_size = get_memory_size() / SHMEM_SIZE_DIV;
             if (segment_ == nullptr) {
                 if (init(est_shmem_size) != est_shmem_size) {
                     remove();
