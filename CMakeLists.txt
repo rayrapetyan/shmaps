@@ -3,10 +3,7 @@ project(shmaps)
 
 set(CMAKE_VERBOSE_MAKEFILE "ON")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -stdlib=libc++ -pthread -Wall")
-
-# libcuckoo
-set(THREADS_PREFER_PTHREAD_FLAG ON)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread -Wall")
 
 include_directories(/usr/local/include)
 
