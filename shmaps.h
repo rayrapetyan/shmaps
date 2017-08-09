@@ -16,9 +16,9 @@
 #include "./libcuckoo_mod/cuckoohash_map.hh"
 
 #ifdef NDEBUG
-    #define SHMEM_SIZE_DIV 1.0622
+    #define SHMEM_SIZE_DIV 1.0805
 #else
-    #define SHMEM_SIZE_DIV 10.0622
+    #define SHMEM_SIZE_DIV 10.0805
 #endif
 
 namespace bip = boost::interprocess;
@@ -250,6 +250,20 @@ namespace shared_memory {
 
         bool del(const KeyType &k) {
             return map_->erase(k);
+        }
+
+        template<typename K, typename F>
+        auto exec(const K &key, F fn, PayloadType *foo=nullptr) -> decltype(fn(foo)) {
+            bool found = false;
+            auto res = map_->exec_fn(key, [&](shared_memory::MappedValType<PayloadType> *val, PayloadType *foo=nullptr) -> decltype(fn(foo)) {
+                found = !val->expired();
+                if (found) {
+                    return fn(&val->payload());
+                } else {
+                    return fn(nullptr);
+                }
+            });
+            return res;
         }
 
         Stats *stats;

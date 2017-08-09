@@ -701,6 +701,18 @@ public:
       return del_elements;
     }
 
+    template <typename K, typename F>
+    auto exec_fn(const K &key, F fn, mapped_type* foo=nullptr) -> decltype(fn(foo)) {
+      const hash_value hv = hashed_key(key);
+      const auto b = snapshot_and_lock_two<normal_mode>(hv);
+      const table_position pos = cuckoo_find(key, hv.partial, b.i1, b.i2);
+      if (pos.status == ok) {
+        return fn(&buckets_[pos.index].mapped(pos.slot));
+      } else {
+        return fn(nullptr);
+      }
+    }
+
   /**@}*/
 
 private:
