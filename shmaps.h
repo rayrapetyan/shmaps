@@ -16,10 +16,12 @@
 #include "./libcuckoo_mod/cuckoohash_map.hh"
 
 #ifdef NDEBUG
-    #define SHMEM_SIZE_DIV 1.0805
+    #define SHMEM_SIZE_DIV 1.0903
 #else
-    #define SHMEM_SIZE_DIV 10.0805
+    #define SHMEM_SIZE_DIV 10.0826
 #endif
+
+#define SHMEM_SEG_NAME "SharedMemorySegment"
 
 namespace bip = boost::interprocess;
 
@@ -29,7 +31,12 @@ namespace shared_memory {
     typedef bip::allocator<char, SegmentManager> CharAllocator;
     typedef bip::basic_string<char, std::char_traits<char>, CharAllocator> String;
 
-    const std::string shmem_seg_name = "SharedMemorySegment";
+    template<typename T> using TAllocator = bip::allocator<T, SegmentManager>;
+    template<typename T> using Vector = bip::vector<T, TAllocator<T>>;
+    template<typename T> using List = bip::list<T, TAllocator<T>>;
+    template<typename T> using Set = bip::set<T, std::less<T>, TAllocator<T>>;
+
+    const std::string shmem_seg_name = SHMEM_SEG_NAME;
     extern bip::managed_shared_memory *segment_;
     extern VoidAllocator *seg_alloc;
 
@@ -193,6 +200,7 @@ namespace shared_memory {
 
         bool set(const KeyType &k, const PayloadType &pl, bool create_only = true,
                  std::chrono::seconds expires = std::chrono::seconds(0)) {
+            bool existing = false;
             if (!map_->update_fn(k, [&](MappedValType<PayloadType> &val) {
                 if (val.expired()) {
                     val.reset(pl, expires);
@@ -203,6 +211,7 @@ namespace shared_memory {
                         ++stats->write.insert.permanent;
                     }
                 } else {
+                    existing = true;
                     if (!create_only) {
                         val.reset(pl);
                         ++stats->write.update;
@@ -221,8 +230,9 @@ namespace shared_memory {
                 } else {
                     ++stats->write.insert.permanent;
                 }
-            }
             return true;
+        }
+            return !(create_only && existing);
         }
 
         bool get(const KeyType &k, PayloadType *pl) {
@@ -256,7 +266,7 @@ namespace shared_memory {
         auto exec(const K &key, F fn, PayloadType *foo=nullptr) -> decltype(fn(foo)) {
             bool found = false;
             auto res = map_->exec_fn(key, [&](shared_memory::MappedValType<PayloadType> *val, PayloadType *foo=nullptr) -> decltype(fn(foo)) {
-                found = !val->expired();
+                found = val && !val->expired();
                 if (found) {
                     return fn(&val->payload());
                 } else {

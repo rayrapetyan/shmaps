@@ -8,7 +8,7 @@ namespace shared_memory {
 
     uint64_t init(uint64_t size) {
         if (segment_ == nullptr) {
-            segment_ = new bip::managed_shared_memory(bip::open_or_create, shmem_seg_name.c_str(), size);
+            segment_ = new bip::managed_shared_memory(bip::open_or_create, SHMEM_SEG_NAME, size);
             assert(segment_ != nullptr);
             seg_alloc = new VoidAllocator(segment_->get_segment_manager());
             assert(seg_alloc != nullptr);
@@ -20,7 +20,7 @@ namespace shared_memory {
         if (segment_ == nullptr) {
             return;
         }
-        bip::shared_memory_object::remove(shmem_seg_name.c_str());
+        bip::shared_memory_object::remove(SHMEM_SEG_NAME);
         segment_ = nullptr;
         return;
     }
