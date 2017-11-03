@@ -16,9 +16,9 @@
 #include "./libcuckoo_mod/cuckoohash_map.hh"
 
 #ifdef NDEBUG
-    #define SHMEM_SIZE_DIV 1.0903
+    #define SHMEM_SIZE_DIV 1.0929
 #else
-    #define SHMEM_SIZE_DIV 10.0826
+    #define SHMEM_SIZE_DIV 10.0929
 #endif
 
 #define SHMEM_SEG_NAME "SharedMemorySegment"
