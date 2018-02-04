@@ -1,6 +1,6 @@
-#include "./shmaps.h"
+#include <shmaps/shmaps.h>
 
-namespace shared_memory {
+namespace shmaps {
 
     bip::managed_shared_memory *segment_ = nullptr;
 
@@ -45,4 +45,4 @@ namespace shared_memory {
         long page_size = sysconf(_SC_PAGE_SIZE);
         return pages * page_size;
     }
-}
+} // namespace shmaps

@@ -8,12 +8,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread -Wall")
 set(SOURCE_FILES
         main.cpp
         redis.cpp
-        redis.h
-        libcuckoo.cpp
-        libcuckoo.h
+        #libcuckoo.cpp
         shmap.cpp
-        shmap.h
-        conf.h
         conf.cpp
         ../shmaps.cpp)
 

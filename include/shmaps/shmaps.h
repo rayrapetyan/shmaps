@@ -13,19 +13,19 @@
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
 
-#include "./libcuckoo_mod/cuckoohash_map.hh"
+#include <libcuckoo/cuckoohash_map.hh>
 
 #ifdef NDEBUG
-    #define SHMEM_SIZE_DIV 1.0929
+    #define SHMEM_SIZE_DIV 1.0202
 #else
-    #define SHMEM_SIZE_DIV 10.0929
+    #define SHMEM_SIZE_DIV 10.0202
 #endif
 
 #define SHMEM_SEG_NAME "SharedMemorySegment"
 
 namespace bip = boost::interprocess;
 
-namespace shared_memory {
+namespace shmaps {
     typedef bip::managed_shared_memory::segment_manager SegmentManager;
     typedef bip::allocator<void, SegmentManager> VoidAllocator;
     typedef bip::allocator<char, SegmentManager> CharAllocator;
@@ -265,7 +265,7 @@ namespace shared_memory {
         template<typename K, typename F>
         auto exec(const K &key, F fn, PayloadType *foo=nullptr) -> decltype(fn(foo)) {
             bool found = false;
-            auto res = map_->exec_fn(key, [&](shared_memory::MappedValType<PayloadType> *val, PayloadType *foo=nullptr) -> decltype(fn(foo)) {
+            auto res = map_->exec_fn(key, [&](MappedValType<PayloadType> *val, PayloadType *foo=nullptr) -> decltype(fn(foo)) {
                 found = val && !val->expired();
                 if (found) {
                     return fn(&val->payload());
@@ -375,6 +375,6 @@ namespace shared_memory {
             return found;
         }
     };
-}
+} // namespace shmaps
 
 #endif // SHMAPS_H

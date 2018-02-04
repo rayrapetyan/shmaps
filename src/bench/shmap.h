@@ -3,8 +3,7 @@
 
 #include <string>
 
-#include <shmaps.h>
-namespace shmem = shared_memory;
+#include <shmaps/shmaps.h>
 
 class FooStats {
 public:
@@ -34,14 +33,14 @@ public:
 
 class FooStatsExtShared {
 public:
-    FooStatsExtShared() : s1(*shmem::seg_alloc), s2(*shmem::seg_alloc) {}
+    FooStatsExtShared() : s1(*shmaps::seg_alloc), s2(*shmaps::seg_alloc) {}
     FooStatsExtShared(const int i1, const char *c1, const char *c2) :
-            i1(i1), s1(c1, *shmem::seg_alloc), s2(c2, *shmem::seg_alloc) {}
+            i1(i1), s1(c1, *shmaps::seg_alloc), s2(c2, *shmaps::seg_alloc) {}
     ~FooStatsExtShared() {}
 
     int i1;
-    shmem::String s1;
-    shmem::String s2;
+    shmaps::String s1;
+    shmaps::String s2;
 };
 
 #endif //BENCH_SHMEM_SHMAP_H
