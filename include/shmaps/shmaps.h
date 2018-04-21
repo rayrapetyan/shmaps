@@ -16,9 +16,9 @@
 #include <libcuckoo/cuckoohash_map.hh>
 
 #ifdef NDEBUG
-    #define SHMEM_SIZE_DIV 1.0202
+    #define SHMEM_SIZE_DIV 1.10421
 #else
-    #define SHMEM_SIZE_DIV 10.0202
+    #define SHMEM_SIZE_DIV 10.10421
 #endif
 
 #define SHMEM_SEG_NAME "SharedMemorySegment"
@@ -200,6 +200,9 @@ namespace shmaps {
 
         bool set(const KeyType &k, const PayloadType &pl, bool create_only = true,
                  std::chrono::seconds expires = std::chrono::seconds(0)) {
+#ifdef MOCK
+            return false;
+#endif
             bool existing = false;
             if (!map_->update_fn(k, [&](MappedValType<PayloadType> &val) {
                 if (val.expired()) {
@@ -236,6 +239,9 @@ namespace shmaps {
         }
 
         bool get(const KeyType &k, PayloadType *pl) {
+#ifdef MOCK
+            return false;
+#endif
             bool found = false;
             map_->update_fn(k, [&](MappedValType<PayloadType> &val) {
                 found = !val.expired();
@@ -249,6 +255,9 @@ namespace shmaps {
         }
 
         bool exists(const KeyType &k) {
+#ifdef MOCK
+            return false;
+#endif
             bool found = false;
             map_->find_fn(k, [&](const MappedValType<PayloadType> &val) {
                 found = !val.expired();
@@ -290,9 +299,9 @@ namespace shmaps {
             */
             const uint purge_elements = 4;
             uint purged_elements = map_->erase_random_fn(purge_elements, [&](MappedValType<PayloadType> &val) {
-                ++stats->write.purge.total;
-                return val.expired();
-            });
+                    ++stats->write.purge.total;
+                    return val.expired();
+                });
             stats->write.purge.hit += purged_elements;
             return;
         }
@@ -315,6 +324,9 @@ namespace shmaps {
         ~MapSet() {};
 
         bool add(const KeyType &k, const SetValType &pl_elem, std::chrono::seconds expires = std::chrono::seconds(0)) {
+#ifdef MOCK
+            return false;
+#endif
             // add one or more members to a set
             if (!map_->update_fn(k, [&](MappedValType<PayloadType> &val) {
                 if (val.expired()) {
@@ -351,6 +363,9 @@ namespace shmaps {
         }
 
         bool members(const KeyType &k, std::set<SetValType> *pl) {
+#ifdef MOCK
+            return false;
+#endif
             bool found = false;
             map_->update_fn(k, [&](MappedValType<PayloadType> &val) {
                 if (!val.expired()) {
@@ -366,6 +381,9 @@ namespace shmaps {
         }
 
         bool is_member(const KeyType &k, const SetValType pl_val) {
+#ifdef MOCK
+            return false;
+#endif
             bool found = false;
             map_->update_fn(k, [&](MappedValType<PayloadType> &val) {
                 found = !val.expired() && (val.payload().find(pl_val) != val.payload().end());
