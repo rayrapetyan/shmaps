@@ -16,9 +16,9 @@
 #include <libcuckoo/cuckoohash_map.hh>
 
 #ifdef NDEBUG
-    #define SHMEM_SIZE_DIV 1.10421
+    #define SHMEM_SIZE_DIV 1.30906
 #else
-    #define SHMEM_SIZE_DIV 10.10421
+    #define SHMEM_SIZE_DIV 10.802
 #endif
 
 #define SHMEM_SEG_NAME "SharedMemorySegment"
@@ -131,6 +131,10 @@ namespace shmaps {
             return payload_;
         }
 
+        const PayloadType &cpayload() const {
+            return payload_;
+        }
+
     private:
         PayloadType payload_;
         std::chrono::time_point<std::chrono::steady_clock> created_at_;
@@ -198,6 +202,18 @@ namespace shmaps {
             return;
         }
 
+        typename MapImpl::locked_table::const_iterator cbegin() {
+            return map_->lock_table().cbegin();
+        }
+
+        typename MapImpl::locked_table::const_iterator cend() {
+            return map_->lock_table().cend();
+        }
+
+        typename MapImpl::locked_table locked() {
+            return map_->lock_table();
+        }
+
         bool set(const KeyType &k, const PayloadType &pl, bool create_only = true,
                  std::chrono::seconds expires = std::chrono::seconds(0)) {
 #ifdef MOCK
@@ -233,8 +249,8 @@ namespace shmaps {
                 } else {
                     ++stats->write.insert.permanent;
                 }
-            return true;
-        }
+                return true;
+            }
             return !(create_only && existing);
         }
 
