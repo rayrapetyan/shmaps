@@ -1,4 +1,4 @@
-#include <shmaps/shmaps.h>
+#include <include/shmaps/shmaps.h>
 
 class FooStats {
 public:
@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
                      *shmaps::seg_alloc);
 
     shmaps::Map<shmaps::String, int> *shmap_string_int = new shmaps::Map<shmaps::String, int>("ShMap_String_Int");
-    res = shmap_string_int->set(sk, k, el_expires);
+    res = shmap_string_int->set(sk, k, false, std::chrono::seconds(el_expires));
     assert(res);
     res = shmap_string_int->get(sk, &val);
     assert(res && val == k);
