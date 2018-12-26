@@ -1,4 +1,6 @@
-#include <include/shmaps/shmaps.h>
+#include "../../include/shmaps/shmaps.hh"
+
+#include <random>
 
 class FooStats {
 public:
@@ -36,12 +38,9 @@ public:
 };
 
 int main(int argc, char *argv[]) {
-    const uint64_t est_shmem_size = 1024 * 1024 * 800; // XMB
-    shmaps::init(1 * 1024);
-    shmaps::remove();
-    if (shmaps::init(est_shmem_size) != est_shmem_size) {
-        return 1;
-    }
+    shmaps::reset();
+    const uint64_t est_shmem_size = 1024 * 1024 * 2000; // make sure value here is x2 of what you get as "free" after tests passed
+    shmaps::init(est_shmem_size);
 
     unsigned int wrk = 4;
     std::cout << "worker " << wrk << " created" << std::endl;

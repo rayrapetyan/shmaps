@@ -1,52 +1,37 @@
 # shmaps
-Persistent shared memory maps with STL containers and TTL support.
+Persistent shared memory key-value storage supporting customized STL containers and TTL.
 
 The proposed solution allows you to organize multiple independent mapping (key-value) storages in a shared memory segment.
 
-Based on a boost/interprocess module.
+Based on a boost/interprocess and libcuckoo lock-free map.
 
-UPD:
-- new lock-free map implementation is used internally (a patched libcuckoo), so no mutexes are needed for syncing access to the shared maps anymore. 
-Also this implementation is magnitude times faster than previous (using boost unordered_map and mutexes).
-It also consumes much less memory.
-- refactored expiration logic (std::chrono is used for all timing operations)
-- added bench and tests
-- note you can't use any data types allocating memory as keys or in values (e.g. you can't use std::string, but you can use shmem::String)
+Limitations:
+- you can't use any STL containers for key or value type (e.g. instead of std::string should use shmem::String);
+- you can't declare shmap maps using "static" keyword, they will raise in constructor.
 
 
 ## Compilation
-You should add shmaps.cpp and shmaps.h into your sources tree.
+shmaps is implemented as a header-only library, just include shmaps.hh into your sources.
 
 ## Init
 ```
-    #include "shmaps.h"
-    
+    #include "shmaps/shmaps.hh"
     namespace shmem = shared_memory;
-    
-    const long est_shmem_size = 1024 * 1024 * 1; // 1MB
-    
-    if (shmem::init(est_shmem_size) != est_shmem_size) {
-        // shmaps segment of a different size already initilized, drop and recreate
-        shmem::remove();
-        if (shmem::init(est_shmem_size) != est_shmem_size) {
-            return 1;
-        }
-    }
+    const long est_shmem_size = 1024 * 1024 * 100; // 100MB, make sure to allocate at least x2 of size expected to be used.
+    shmem::init(est_shmem_size);
 ```
 
 ## Example 1: shared map of int-s.
-`ShMap_String_Int` is opened or created and is available from any other process in the system
 ```
     const int el_expires = 2;
     bool res;
     int k = 100;
     int val;
     FooStatsExt fse;
-    shmem::String sk(std::to_string(k).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
-                    *shmem::seg_alloc);
+    shmem::String sk(std::to_string(k).c_str(), *shmem::seg_alloc);
     
     shmem::Map<shmem::String, int> *shmap_string_int = new shmem::Map<shmem::String, int>("ShMap_String_Int");
-    res = shmap_string_int->set(sk, k, el_expires);
+    res = shmap_string_int->set(sk, k, false, std::chrono::seconds(el_expires));
     assert(res);
     res = shmap_string_int->get(sk, &val);
     assert(res && val == k);
@@ -59,8 +44,7 @@ You should add shmaps.cpp and shmaps.h into your sources tree.
     int k = 100;
     int val;
     FooStatsExt fse;
-    shmem::String sk(std::to_string(k).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
-                    *shmem::seg_alloc);
+    shmem::String sk(std::to_string(k).c_str(), *shmem::seg_alloc);
     
     class FooStats {
     public:
@@ -94,8 +78,7 @@ You should add shmaps.cpp and shmaps.h into your sources tree.
     int k = 100;
     int val;
     FooStatsExt fse;
-    shmem::String sk(std::to_string(k).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
-                    *shmem::seg_alloc);
+    shmem::String sk(std::to_string(k).c_str(), *shmem::seg_alloc);
     
     class FooStatsExt {
     public:
@@ -127,8 +110,7 @@ You should add shmaps.cpp and shmaps.h into your sources tree.
     int k = 100;
     int val;
     FooStatsExt fse;
-    shmem::String sk(std::to_string(k).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
-                    *shmem::seg_alloc);
+    shmem::String sk(std::to_string(k).c_str(), *shmem::seg_alloc);
     
     shmem::MapSet<shmem::String, int> *shmap_string_set_int = new shmem::MapSet<shmem::String, int>("ShMap_String_SetInt");
     res = shmap_string_set_int->add(sk, k);
@@ -148,8 +130,7 @@ You should add shmaps.cpp and shmaps.h into your sources tree.
     int k = 100;
     int val;
     FooStatsExt fse;
-    shmem::String sk(std::to_string(k).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
-                    *shmem::seg_alloc);
+    shmem::String sk(std::to_string(k).c_str(), *shmem::seg_alloc);
     
     shmem::MapSet <shmem::String, shmem::String> *shmap_string_set_string = new shmem::MapSet<shmem::String, shmem::String>("ShMap_String_SetString");
     res = shmap_string_set_string->add(sk, shmem::String(sk.c_str(), *shmem::seg_alloc), std::chrono::seconds(el_expires));
@@ -158,23 +139,6 @@ You should add shmaps.cpp and shmaps.h into your sources tree.
     std::set<shmem::String> ss;
     res = shmap_string_set_string->members(sk, &ss);
     assert(res && ss == res_check2);
-```
-
-## Clean-up (usually never used as shmaps are persistent by nature):
-```
-  shmap_int_foostats->destroy();
-  shmap_string_foostats_ext->destroy();
-  shmap_string_int->destroy();
-  shmap_string_set_int->destroy();
-  shmap_string_set_string->destroy();
-  
-  delete shmap_int_foostats;
-  delete shmap_string_foostats_ext;
-  delete shmap_string_int;
-  delete shmap_string_set_int;
-  delete shmap_string_set_string;
-  
-  shmem::remove();
 ```
 
 Written by Robert Ayrapetyan (robert.ayrapetyan@gmail.com).

@@ -1,25 +1,17 @@
 #ifndef SHMAPS_H
 #define SHMAPS_H
 
-#include <unistd.h>
-#include <iostream>
-
-#include <boost/interprocess/managed_shared_memory.hpp>
-#include <boost/utility.hpp>
-#include <boost/interprocess/detail/managed_memory_impl.hpp>
+#include <boost/heap/priority_queue.hpp>
+#include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/interprocess/containers/list.hpp>
 #include <boost/interprocess/containers/set.hpp>
 #include <boost/interprocess/containers/string.hpp>
+#include <boost/interprocess/containers/vector.hpp>
+#include <boost/interprocess/detail/managed_memory_impl.hpp>
 #include <boost/interprocess/managed_shared_memory.hpp>
-#include <boost/interprocess/allocators/allocator.hpp>
+#include <boost/utility.hpp>
 
-#include <libcuckoo/cuckoohash_map.hh>
-
-#ifdef NDEBUG
-    #define SHMEM_SIZE_DIV 1.30906
-#else
-    #define SHMEM_SIZE_DIV 10.802
-#endif
+#include </ara/devel/3rd_party/libcuckoo/libcuckoo/cuckoohash_map.hh>
 
 #define SHMEM_SEG_NAME "SharedMemorySegment"
 
@@ -37,18 +29,51 @@ namespace shmaps {
     template<typename T> using Set = bip::set<T, std::less<T>, TAllocator<T>>;
 
     const std::string shmem_seg_name = SHMEM_SEG_NAME;
-    extern bip::managed_shared_memory *segment_;
-    extern VoidAllocator *seg_alloc;
 
-    uint64_t init(uint64_t size);
+    inline bip::managed_shared_memory *segment_ = nullptr;
+    inline VoidAllocator *seg_alloc = nullptr;
 
-    void remove();
+    inline void reset() {
+        bip::shared_memory_object::remove(SHMEM_SEG_NAME);
+        segment_ = nullptr;
+        return;
+    }
 
-    uint64_t grow(uint64_t add_size);
+    inline uint64_t init(uint64_t size) {
+        if (segment_ == nullptr) {
+            try {
+                segment_ = new bip::managed_shared_memory(bip::open_or_create, SHMEM_SEG_NAME, size);
+                assert(segment_ != nullptr);
+                if (segment_->get_size() != size) {
+                    reset();
+                    segment_ = new bip::managed_shared_memory(bip::open_or_create, SHMEM_SEG_NAME, size);
+                }
+            }
+            catch (...) {
+                reset();
+                segment_ = new bip::managed_shared_memory(bip::open_or_create, SHMEM_SEG_NAME, size);
+            }
+            assert(segment_ != nullptr);
+            seg_alloc = new VoidAllocator(segment_->get_segment_manager());
+            assert(seg_alloc != nullptr);
+        }
+        return segment_->get_size();
+    }
 
-    uint64_t size();
+    inline uint64_t grow(uint64_t add_size) {
+        assert(segment_);
+        uint cur_seg_size = segment_->get_size();
+        delete segment_;
+        bip::managed_shared_memory::grow(shmem_seg_name.c_str(), add_size);
+        segment_ = new bip::managed_shared_memory(bip::open_only, shmem_seg_name.c_str());
+        assert(segment_->get_size() == cur_seg_size + add_size);
+        return cur_seg_size + add_size;
+    }
 
-    uint64_t get_memory_size();
+    inline uint64_t size() {
+        assert(segment_);
+        return segment_->get_size();
+    }
 
     struct Stats {
         struct {
@@ -152,16 +177,8 @@ namespace shmaps {
         Map() {};
 
         explicit Map(const std::string &name) : map_name_(name) {
-            const uint64_t est_shmem_size = get_memory_size() / SHMEM_SIZE_DIV;
-            if (segment_ == nullptr) {
-                if (init(est_shmem_size) != est_shmem_size) {
-                    remove();
-                    if (init(est_shmem_size) != est_shmem_size) {
-                        abort();
-                    }
-                }
-            }
             assert(segment_ != nullptr);
+            std::cout << segment_ << std::endl;
             map_ = segment_->find_or_construct<MapImpl>(map_name_.data())(
                     LIBCUCKOO_DEFAULT_SIZE,
                     Hash(),
@@ -170,8 +187,7 @@ namespace shmaps {
             assert(map_ != nullptr);
             stats = segment_->find_or_construct<Stats>(std::string(name + "stats").data())();
             assert(stats != nullptr);
-
-            info();
+            //info();
         }
 
         ~Map() {
@@ -190,7 +206,6 @@ namespace shmaps {
 
         void destroy() {
             if (segment_ == nullptr) {
-                // map was already destroyed from elsewhere, not a bug as segment_ is static
                 return;
             }
             segment_->destroy<MapImpl>(map_name_.c_str());
@@ -289,6 +304,10 @@ namespace shmaps {
 
         template<typename K, typename F>
         auto exec(const K &key, F fn, PayloadType *foo=nullptr) -> decltype(fn(foo)) {
+            /*
+            // TODO!!!!!!!!
+            decltype(fn(foo)) a;
+            return a;*/
             bool found = false;
             auto res = map_->exec_fn(key, [&](MappedValType<PayloadType> *val, PayloadType *foo=nullptr) -> decltype(fn(foo)) {
                 found = val && !val->expired();
@@ -299,6 +318,10 @@ namespace shmaps {
                 }
             });
             return res;
+        }
+
+        uint size() const {
+            return map_->size();
         }
 
         Stats *stats;
@@ -328,8 +351,8 @@ namespace shmaps {
         typedef bip::set<SetValType, std::less<SetValType>, bip::allocator<SetValType, SegmentManager>> PayloadType;
         using Map<KeyType, PayloadType, Hash, Pred>::map_;
         using Map<KeyType, PayloadType, Hash, Pred>::stats;
-        using ValueType = typename Map<KeyType, PayloadType, Hash, Pred>::ValueType;
         using Map<KeyType, PayloadType, Hash, Pred>::purge;
+        using ValueType = typename Map<KeyType, PayloadType, Hash, Pred>::ValueType;
 
     public:
 
