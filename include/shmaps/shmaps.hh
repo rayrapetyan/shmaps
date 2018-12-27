@@ -39,27 +39,6 @@ namespace shmaps {
         return;
     }
 
-    inline uint64_t init(uint64_t size) {
-        if (segment_ == nullptr) {
-            try {
-                segment_ = new bip::managed_shared_memory(bip::open_or_create, SHMEM_SEG_NAME, size);
-                assert(segment_ != nullptr);
-                if (segment_->get_size() != size) {
-                    reset();
-                    segment_ = new bip::managed_shared_memory(bip::open_or_create, SHMEM_SEG_NAME, size);
-                }
-            }
-            catch (...) {
-                reset();
-                segment_ = new bip::managed_shared_memory(bip::open_or_create, SHMEM_SEG_NAME, size);
-            }
-            assert(segment_ != nullptr);
-            seg_alloc = new VoidAllocator(segment_->get_segment_manager());
-            assert(seg_alloc != nullptr);
-        }
-        return segment_->get_size();
-    }
-
     inline uint64_t grow(uint64_t add_size) {
         assert(segment_);
         uint cur_seg_size = segment_->get_size();
@@ -68,6 +47,28 @@ namespace shmaps {
         segment_ = new bip::managed_shared_memory(bip::open_only, shmem_seg_name.c_str());
         assert(segment_->get_size() == cur_seg_size + add_size);
         return cur_seg_size + add_size;
+    }
+
+    inline uint64_t init(uint64_t size) {
+        if (segment_ == nullptr) {
+            try {
+                segment_ = new bip::managed_shared_memory(bip::open_or_create, SHMEM_SEG_NAME, size);
+                assert(segment_ != nullptr);
+            }
+            catch (...) {
+                std::cout << "error creating shared memory segment" << std::endl;
+                reset();
+                segment_ = new bip::managed_shared_memory(bip::open_or_create, SHMEM_SEG_NAME, size);
+            }
+            assert(segment_ != nullptr);
+            seg_alloc = new VoidAllocator(segment_->get_segment_manager());
+            assert(seg_alloc != nullptr);
+        }
+        if (segment_->get_size() < size) {
+            grow(size - segment_->get_size());
+            assert(segment_->get_size() == size);
+        }
+        return segment_->get_size();
     }
 
     inline uint64_t size() {
@@ -177,8 +178,9 @@ namespace shmaps {
         Map() {};
 
         explicit Map(const std::string &name) : map_name_(name) {
-            assert(segment_ != nullptr);
-            std::cout << segment_ << std::endl;
+            if (segment_ == nullptr) { // static map, ctor called before main (init).
+                init(100 * 1024 * 1024);
+            }
             map_ = segment_->find_or_construct<MapImpl>(map_name_.data())(
                     LIBCUCKOO_DEFAULT_SIZE,
                     Hash(),
@@ -187,7 +189,7 @@ namespace shmaps {
             assert(map_ != nullptr);
             stats = segment_->find_or_construct<Stats>(std::string(name + "stats").data())();
             assert(stats != nullptr);
-            //info();
+            info();
         }
 
         ~Map() {

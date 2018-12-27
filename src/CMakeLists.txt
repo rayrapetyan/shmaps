@@ -24,3 +24,8 @@ enable_testing()
 
 add_subdirectory(bench)
 add_subdirectory(test)
+
+set(SOURCE_FILES
+        reset.cpp
+        )
+add_executable(reset ${SOURCE_FILES})

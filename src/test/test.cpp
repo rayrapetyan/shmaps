@@ -37,8 +37,9 @@ public:
     shmaps::String s2;
 };
 
+static shmaps::Map<shmaps::String, int> *shmap_string_int_static = new shmaps::Map<shmaps::String, int>("ShMap_Static_String_Int");
+
 int main(int argc, char *argv[]) {
-    shmaps::reset();
     const uint64_t est_shmem_size = 1024 * 1024 * 2000; // make sure value here is x2 of what you get as "free" after tests passed
     shmaps::init(est_shmem_size);
 
@@ -54,13 +55,17 @@ int main(int argc, char *argv[]) {
     }
 
     const int el_expires = 2;
-    bool res;
+    bool res = false;
     int k = 100;
     int val;
-    const std::string long_str= "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     FooStatsExt fse;
-    shmaps::String sk(std::to_string(k).append(long_str).c_str(),
-                     *shmaps::seg_alloc);
+    const std::string long_str= "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    shmaps::String sk(std::to_string(k).append(long_str).c_str(), *shmaps::seg_alloc);
+
+    res = shmap_string_int_static->set(sk, k, false, std::chrono::seconds(el_expires));
+    assert(res);
+    res = shmap_string_int_static->get(sk, &val);
+    assert(res && val == k);
 
     shmaps::Map<shmaps::String, int> *shmap_string_int = new shmaps::Map<shmaps::String, int>("ShMap_String_Int");
     res = shmap_string_int->set(sk, k, false, std::chrono::seconds(el_expires));

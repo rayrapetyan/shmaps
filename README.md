@@ -6,8 +6,7 @@ The proposed solution allows you to organize multiple independent mapping (key-v
 Based on a boost/interprocess and libcuckoo lock-free map.
 
 Limitations:
-- you can't use any STL containers for key or value type (e.g. instead of std::string should use shmem::String);
-- you can't declare shmap maps using "static" keyword, they will raise in constructor.
+- you can't use STL containers for key or value type (e.g. instead of std::string you should use shmem::String);
 
 
 ## Compilation
