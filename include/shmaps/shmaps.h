@@ -13,12 +13,12 @@
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
 
-#include <libcuckoo/cuckoohash_map.hh>
+#include </ara/devel/3rd_party/libcuckoo/libcuckoo/cuckoohash_map.hh>
 
 #ifdef NDEBUG
-    #define SHMEM_SIZE_DIV 1.30906
+    #define SHMEM_SIZE_DIV 1.1227
 #else
-    #define SHMEM_SIZE_DIV 10.802
+    #define SHMEM_SIZE_DIV 10.1227
 #endif
 
 #define SHMEM_SEG_NAME "SharedMemorySegment"
@@ -286,6 +286,11 @@ namespace shmaps {
         bool del(const KeyType &k) {
             return map_->erase(k);
         }
+
+        uint size() {
+            return map_->size();
+        }
+
 
         template<typename K, typename F>
         auto exec(const K &key, F fn, PayloadType *foo=nullptr) -> decltype(fn(foo)) {
