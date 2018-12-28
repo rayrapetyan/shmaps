@@ -3,7 +3,7 @@
 
 #include <string>
 
-#include <shmaps/shmaps.h>
+#include "../../include/shmaps/shmaps.hh"
 
 class FooStats {
 public:

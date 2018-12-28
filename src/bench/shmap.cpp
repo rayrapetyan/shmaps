@@ -6,17 +6,15 @@
 
 namespace bip = boost::interprocess;
 
+const std::string long_str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
 class ShMapFixture : public ::benchmark::Fixture {
 public:
     ShMapFixture() {
         //std::cout << "ShMapFixture ctor" << std::endl;
         const long est_shmem_size = get_memory_size() / 10;
-        if (shmaps::init(est_shmem_size) != est_shmem_size) {
-            shmaps::remove();
-            if (shmaps::init(est_shmem_size) != est_shmem_size) {
-                throw 1;
-            }
-        }
+        shmaps::reset();
+        shmaps::init(est_shmem_size);
         shmap_int_int = new shmaps::Map<int, int>("ShMapIntInt");
         shmap_int_foostats = new shmaps::Map<int, FooStats>("ShMapIntFooStats");
         shmap_string_foostats_ext = new shmaps::Map<shmaps::String, FooStatsExtShared>("ShMapStringFooStatsExt");
@@ -50,7 +48,7 @@ public:
         delete shmap_string_set_int;
         delete shmap_string_set_string;
 
-        shmaps::remove();
+        shmaps::reset();
     }
 
     shmaps::Map<int, int> *shmap_int_int;
@@ -118,8 +116,7 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_Set_StringInt)(benchmark::State &st) {
     while (st.KeepRunning()) {
         shmap_string_int->clear();
         for (int i = 0; i < el_num; ++i) {
-            shmaps::String s(std::to_string(i).append(
-                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
+            shmaps::String s(std::to_string(i).append(long_str).c_str(),
                             *shmaps::seg_alloc);
             res = shmap_string_int->set(s,
                                         i,
@@ -137,8 +134,7 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_StringInt)(benchmark::State &st) {
     while (st.KeepRunning()) {
         shmap_string_int->clear();
         for (int i = 0; i < el_num; ++i) {
-            shmaps::String s(std::to_string(i).append(
-                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
+            shmaps::String s(std::to_string(i).append(long_str).c_str(),
                             *shmaps::seg_alloc);
             res = shmap_string_int->set(s,
                                         i,
@@ -156,8 +152,7 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_Set_StringFooStatsExt)(benchmark::State &st) 
     while (st.KeepRunning()) {
         shmap_string_foostats_ext->clear();
         for (int i = 0; i < el_num; ++i) {
-            shmaps::String s(std::to_string(i).append(
-                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
+            shmaps::String s(std::to_string(i).append(long_str).c_str(),
                             *shmaps::seg_alloc);
             res = shmap_string_foostats_ext->set(s,
                                                  FooStatsExtShared(i, s.c_str(), s.c_str()),
@@ -175,7 +170,7 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_StringFooStatsExt)(benchmark::State &s
     while (st.KeepRunning()) {
         shmap_string_foostats_ext->clear();
         for (int i = 0; i < el_num; ++i) {
-            shmaps::String s(std::to_string(i).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").c_str(),
+            shmaps::String s(std::to_string(i).append(long_str).c_str(),
                             *shmaps::seg_alloc);
             res = shmap_string_foostats_ext->set(s,
                                                  FooStatsExtShared(i, s.c_str(), s.c_str()),
