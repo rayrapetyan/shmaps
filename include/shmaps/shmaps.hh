@@ -179,7 +179,7 @@ namespace shmaps {
 
         explicit Map(const std::string &name) : map_name_(name) {
             if (segment_ == nullptr) { // static map, ctor called before main (init).
-                init(100 * 1024 * 1024);
+                init(1000 * 1024 * 1024);
             }
             map_ = segment_->find_or_construct<MapImpl>(map_name_.data())(
                     LIBCUCKOO_DEFAULT_SIZE,
