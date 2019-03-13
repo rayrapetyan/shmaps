@@ -11,7 +11,7 @@
 #include <boost/interprocess/managed_shared_memory.hpp>
 #include <boost/utility.hpp>
 
-#include </ara/devel/3rd_party/libcuckoo/libcuckoo/cuckoohash_map.hh>
+#include <libcuckoo/cuckoohash_map.hh>
 
 #define SHMEM_SEG_NAME "SharedMemorySegment"
 
