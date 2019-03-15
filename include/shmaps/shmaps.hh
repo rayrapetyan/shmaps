@@ -67,6 +67,8 @@ namespace shmaps {
         if (segment_->get_size() < size) {
             grow(size - segment_->get_size());
             assert(segment_->get_size() == size);
+            std::cout << "shmaps segment size has changed, restart your app\n" << std::endl;
+            exit(0);
         }
         return segment_->get_size();
     }
@@ -179,7 +181,7 @@ namespace shmaps {
 
         explicit Map(const std::string &name) : map_name_(name) {
             if (segment_ == nullptr) { // static map, ctor called before main (init).
-                init(1000 * 1024 * 1024);
+                init(1000000000);
             }
             map_ = segment_->find_or_construct<MapImpl>(map_name_.data())(
                     LIBCUCKOO_DEFAULT_SIZE,
