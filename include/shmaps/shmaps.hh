@@ -15,6 +15,9 @@
 
 #define SHMEM_SEG_NAME "SharedMemorySegment"
 
+#define INIT_SEG_SIZE 1024 * 1024 * 1024
+#define INIT_MAP_SIZE libcuckoo::DEFAULT_SIZE
+
 namespace bip = boost::interprocess;
 
 namespace shmaps {
@@ -22,6 +25,9 @@ namespace shmaps {
     typedef bip::allocator<void, SegmentManager> VoidAllocator;
     typedef bip::allocator<char, SegmentManager> CharAllocator;
     typedef bip::basic_string<char, std::char_traits<char>, CharAllocator> String;
+
+    typedef std::chrono::time_point<std::chrono::steady_clock> TimePoint;
+    typedef std::chrono::seconds Seconds;
 
     template<typename T> using TAllocator = bip::allocator<T, SegmentManager>;
     template<typename T> using Vector = bip::vector<T, TAllocator<T>>;
@@ -78,6 +84,10 @@ namespace shmaps {
         return segment_->get_size();
     }
 
+    inline TimePoint now() {
+        return std::chrono::steady_clock::now();
+    }
+
     struct Stats {
         struct {
             struct {
@@ -125,29 +135,29 @@ namespace shmaps {
     public:
         MappedValType() {}
 
-        MappedValType(std::chrono::seconds &ttl, const VoidAllocator &void_alloc) :
+        MappedValType(Seconds &ttl, const VoidAllocator &void_alloc) :
                 payload_(void_alloc),
-                created_at_(std::chrono::steady_clock::now()),
+                created_at_(now()),
                 ttl_(ttl) {}
 
-        MappedValType(const PayloadType &payload, std::chrono::seconds &ttl) :
+        MappedValType(const PayloadType &payload, Seconds &ttl) :
                 payload_(payload),
-                created_at_(std::chrono::steady_clock::now()),
+                created_at_(now()),
                 ttl_(ttl) {}
 
         ~MappedValType() {}
 
         bool expired() const {
-            return ttl_ != std::chrono::seconds(0) && (std::chrono::steady_clock::now() - created_at_ > ttl_);
+            return ttl_ != Seconds(0) && (now() - created_at_ > ttl_);
         }
 
-        void reset(const PayloadType &payload, std::chrono::seconds &ttl) {
+        void reset(const PayloadType &payload, Seconds &ttl) {
             reset(payload);
             reset(ttl);
         }
 
-        void reset(std::chrono::seconds &ttl) {
-            created_at_ = std::chrono::steady_clock::now();
+        void reset(Seconds &ttl) {
+            created_at_ = now();
             ttl_ = ttl;
         }
 
@@ -165,8 +175,8 @@ namespace shmaps {
 
     private:
         PayloadType payload_;
-        std::chrono::time_point<std::chrono::steady_clock> created_at_;
-        std::chrono::seconds ttl_;
+        TimePoint created_at_;
+        Seconds ttl_;
     };
 
 
@@ -181,10 +191,10 @@ namespace shmaps {
 
         explicit Map(const std::string &name) : map_name_(name) {
             if (segment_ == nullptr) { // static map, ctor called before main (init).
-                init(1000000000);
+                init(INIT_SEG_SIZE);
             }
             map_ = segment_->find_or_construct<MapImpl>(map_name_.data())(
-                    libcuckoo::DEFAULT_SIZE,
+                    INIT_MAP_SIZE,
                     Hash(),
                     Pred(),
                     segment_->get_allocator<MappedValType<PayloadType>>());
@@ -206,7 +216,6 @@ namespace shmaps {
                     map_->size());
             stats->info();
         }
-
 
         void destroy() {
             if (segment_ == nullptr) {
@@ -234,7 +243,7 @@ namespace shmaps {
         }
 
         bool set(const KeyType &k, const PayloadType &pl, bool create_only = true,
-                 std::chrono::seconds expires = std::chrono::seconds(0)) {
+                 Seconds expires = Seconds(0)) {
 #ifdef MOCK
             return false;
 #endif
@@ -243,7 +252,7 @@ namespace shmaps {
                 if (val.expired()) {
                     val.reset(pl, expires);
                     ++stats->write.insert.total;
-                    if (expires != std::chrono::seconds(0)) {
+                    if (expires != Seconds(0)) {
                         ++stats->write.insert.expiring;
                     } else {
                         ++stats->write.insert.permanent;
@@ -263,7 +272,7 @@ namespace shmaps {
                 purge();
 
                 ++stats->write.insert.total;
-                if (expires != std::chrono::seconds(0)) {
+                if (expires != Seconds(0)) {
                     ++stats->write.insert.expiring;
                 } else {
                     ++stats->write.insert.permanent;
@@ -366,7 +375,7 @@ namespace shmaps {
 
         ~MapSet() {};
 
-        bool add(const KeyType &k, const SetValType &pl_elem, std::chrono::seconds expires = std::chrono::seconds(0)) {
+        bool add(const KeyType &k, const SetValType &pl_elem, Seconds expires = Seconds(0)) {
 #ifdef MOCK
             return false;
 #endif
@@ -377,7 +386,7 @@ namespace shmaps {
                     val.payload().insert(pl_elem);
                     val.reset(expires);
                     ++stats->write.insert.total;
-                    if (expires != std::chrono::seconds(0)) {
+                    if (expires != Seconds(0)) {
                         ++stats->write.insert.expiring;
                     } else {
                         ++stats->write.insert.permanent;
@@ -396,7 +405,7 @@ namespace shmaps {
                 purge();
 
                 ++stats->write.insert.total;
-                if (expires != std::chrono::seconds(0)) {
+                if (expires != Seconds(0)) {
                     ++stats->write.insert.expiring;
                 } else {
                     ++stats->write.insert.permanent;
