@@ -9,7 +9,22 @@ Limitations:
 - you can't use STL containers for key or value type (e.g. instead of std::string you should use shmem::String);
 
 ## Dependencies
-Currently only clang 10+ is supported
+Currently only clang 10+ with llvm's c++ lib is supported. So everything should work out of the box in FreeBSD 11+.
+
+You need to install boost libraries, e.g. in FreeBSD:
+
+    pkg install boost-libs
+
+For Linux-based OS, please install following dependencies (tested in Ubuntu 18.04):
+
+    apt install libboost-dev
+    apt install cmake clang-10 libc++-10-dev libc++abi-10-dev
+
+Set clang++-10 as default c++ compiler:
+
+    update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++-10 60
+
+Then you should be able to compile your code with `-stdlib=libc++` option.
 
 ### libcuckoo
 A custom version of libcuckoo (with "erase random" support) required.
@@ -19,7 +34,7 @@ A custom version of libcuckoo (with "erase random" support) required.
     cp libcuckoo/libcuckoo/*.hh /usr/local/include/libcuckoo
 
 ### Benchmark
-Packages:
+Packages required:
 
     benchmark redis hiredis
 

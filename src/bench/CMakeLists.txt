@@ -12,4 +12,7 @@ find_package(benchmark REQUIRED)
 find_package(hiredis)
 
 add_executable(bench_shmem ${SOURCE_FILES})
-target_link_libraries(bench_shmem benchmark hiredis)
+
+set(CMAKE_CXX_FLAGS "-O2 -g -DNDEBUG -stdlib=libc++")
+
+target_link_libraries(bench_shmem benchmark hiredis pthread rt)
