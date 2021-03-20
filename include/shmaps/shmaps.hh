@@ -175,7 +175,7 @@ namespace shmaps {
     public:
         typedef std::pair<const KeyType, MappedValType<PayloadType> > ValueType;
         typedef bip::allocator<ValueType, SegmentManager> ValueTypeAllocator;
-        typedef cuckoohash_map<KeyType, MappedValType<PayloadType>, Hash, Pred, ValueTypeAllocator> MapImpl;
+        typedef libcuckoo::cuckoohash_map<KeyType, MappedValType<PayloadType>, Hash, Pred, ValueTypeAllocator> MapImpl;
 
         Map() {};
 
@@ -184,7 +184,7 @@ namespace shmaps {
                 init(1000000000);
             }
             map_ = segment_->find_or_construct<MapImpl>(map_name_.data())(
-                    LIBCUCKOO_DEFAULT_SIZE,
+                    libcuckoo::DEFAULT_SIZE,
                     Hash(),
                     Pred(),
                     segment_->get_allocator<MappedValType<PayloadType>>());

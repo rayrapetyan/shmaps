@@ -8,6 +8,22 @@ Based on a boost/interprocess and libcuckoo lock-free map.
 Limitations:
 - you can't use STL containers for key or value type (e.g. instead of std::string you should use shmem::String);
 
+## Dependencies
+Currently only clang 10+ is supported
+
+### libcuckoo
+A custom version of libcuckoo (with "erase random" support) required.
+
+    git clone --branch erase_random https://github.com/rayrapetyan/libcuckoo.git libcuckoo
+    mkdir /usr/local/include/libcuckoo
+    cp libcuckoo/libcuckoo/*.hh /usr/local/include/libcuckoo
+
+### Benchmark
+Packages:
+
+    benchmark redis hiredis
+
+A running instance of redis required
 
 ## Compilation
 shmaps is implemented as a header-only library, just include shmaps.hh into your sources.

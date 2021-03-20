@@ -10,10 +10,10 @@
 
 class LibCuckooFixture : public ::benchmark::Fixture {
 public:
-    typedef cuckoohash_map<int, int> LibCuckooIntInt;
-    typedef cuckoohash_map<int, FooStats> LibCuckooIntFooStats;
-    typedef cuckoohash_map<std::string, int> LibCuckooStringInt;
-    typedef cuckoohash_map<std::string, FooStatsExtPlain> LibCuckooStringFooStatsExt;
+    typedef libcuckoo::cuckoohash_map<int, int> LibCuckooIntInt;
+    typedef libcuckoo::cuckoohash_map<int, FooStats> LibCuckooIntFooStats;
+    typedef libcuckoo::cuckoohash_map<std::string, int> LibCuckooStringInt;
+    typedef libcuckoo::cuckoohash_map<std::string, FooStatsExtPlain> LibCuckooStringFooStatsExt;
 
     LibCuckooFixture() {
         //std::cout << "LibCuckooFixture ctor" << std::endl;
