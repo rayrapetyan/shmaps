@@ -1,6 +1,7 @@
 #ifndef SHMAPS_H
 #define SHMAPS_H
 
+#include <boost/functional/hash.hpp>
 #include <boost/heap/priority_queue.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/interprocess/containers/list.hpp>
