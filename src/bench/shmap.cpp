@@ -1,20 +1,16 @@
 #include "./shmap.h"
+#include "./conf.h"
 
 #include <benchmark/benchmark.h>
 
-#include "./conf.h"
+const std::string long_str = std::string(100, 'a');
 
 namespace bip = boost::interprocess;
-
-const std::string long_str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 class ShMapFixture : public ::benchmark::Fixture {
 public:
     ShMapFixture() {
-        //std::cout << "ShMapFixture ctor" << std::endl;
-        const long est_shmem_size = get_memory_size() / 10;
-        shmaps::reset();
-        shmaps::init(est_shmem_size);
+        std::cout << "ShMapFixture ctor" << std::endl;
         shmap_int_int = new shmaps::Map<int, int>("ShMapIntInt");
         shmap_int_foostats = new shmaps::Map<int, FooStats>("ShMapIntFooStats");
         shmap_string_foostats_ext = new shmaps::Map<shmaps::String, FooStatsExtShared>("ShMapStringFooStatsExt");
@@ -25,7 +21,7 @@ public:
     }
 
     void SetUp(const ::benchmark::State &state) {
-        // std::cout << "ShMapFixture SetUp" << std::endl;
+        //std::cout << "ShMapFixture SetUp" << std::endl;
     }
 
     void TearDown(const ::benchmark::State &state) {
@@ -60,9 +56,9 @@ public:
     shmaps::MapSet<shmaps::String, shmaps::String> *shmap_string_set_string;
 };
 
-BENCHMARK_F(ShMapFixture, BM_ShMap_Set_IntInt)(benchmark::State &st) {
+BENCHMARK_F(ShMapFixture, BM_ShMap_Set_IntInt)(benchmark::State &state) {
     bool res;
-    while (st.KeepRunning()) {
+    for (auto _: state) {
         shmap_int_int->clear();
         for (int i = 0; i < el_num; ++i) {
             res = shmap_int_int->set(i, i, false, std::chrono::seconds(el_expires));
@@ -71,10 +67,10 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_Set_IntInt)(benchmark::State &st) {
     }
 }
 
-BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_IntInt)(benchmark::State &st) {
+BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_IntInt)(benchmark::State &state) {
     bool res;
     int val;
-    while (st.KeepRunning()) {
+    for (auto _: state) {
         shmap_int_int->clear();
         for (int i = 0; i < el_num; ++i) {
             res = shmap_int_int->set(i, i, false, std::chrono::seconds(el_expires));
@@ -86,9 +82,9 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_IntInt)(benchmark::State &st) {
 }
 
 
-BENCHMARK_F(ShMapFixture, BM_ShMap_Set_IntFooStats)(benchmark::State &st) {
+BENCHMARK_F(ShMapFixture, BM_ShMap_Set_IntFooStats)(benchmark::State &state) {
     bool res;
-    while (st.KeepRunning()) {
+    for (auto _: state) {
         shmap_int_foostats->clear();
         for (int i = 0; i < el_num; ++i) {
             res = shmap_int_foostats->set(i, FooStats(i, 2, 3.0), false, std::chrono::seconds(el_expires));
@@ -97,10 +93,10 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_Set_IntFooStats)(benchmark::State &st) {
     }
 }
 
-BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_IntFooStats)(benchmark::State &st) {
+BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_IntFooStats)(benchmark::State &state) {
     bool res;
     FooStats fs;
-    while (st.KeepRunning()) {
+    for (auto _: state) {
         shmap_int_foostats->clear();
         for (int i = 0; i < el_num; ++i) {
             res = shmap_int_foostats->set(i, FooStats(i, 2, 3.0), false, std::chrono::seconds(el_expires));
@@ -111,13 +107,13 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_IntFooStats)(benchmark::State &st) {
     }
 }
 
-BENCHMARK_F(ShMapFixture, BM_ShMap_Set_StringInt)(benchmark::State &st) {
+BENCHMARK_F(ShMapFixture, BM_ShMap_Set_StringInt)(benchmark::State &state) {
     bool res;
-    while (st.KeepRunning()) {
+    for (auto _: state) {
         shmap_string_int->clear();
         for (int i = 0; i < el_num; ++i) {
             shmaps::String s(std::to_string(i).append(long_str).c_str(),
-                            *shmaps::seg_alloc);
+                             *shmaps::seg_alloc);
             res = shmap_string_int->set(s,
                                         i,
                                         false,
@@ -128,14 +124,14 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_Set_StringInt)(benchmark::State &st) {
 
 }
 
-BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_StringInt)(benchmark::State &st) {
+BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_StringInt)(benchmark::State &state) {
     bool res;
     int val;
-    while (st.KeepRunning()) {
+    for (auto _: state) {
         shmap_string_int->clear();
         for (int i = 0; i < el_num; ++i) {
             shmaps::String s(std::to_string(i).append(long_str).c_str(),
-                            *shmaps::seg_alloc);
+                             *shmaps::seg_alloc);
             res = shmap_string_int->set(s,
                                         i,
                                         false,
@@ -147,13 +143,13 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_StringInt)(benchmark::State &st) {
     }
 }
 
-BENCHMARK_F(ShMapFixture, BM_ShMap_Set_StringFooStatsExt)(benchmark::State &st) {
+BENCHMARK_F(ShMapFixture, BM_ShMap_Set_StringFooStatsExt)(benchmark::State &state) {
     bool res;
-    while (st.KeepRunning()) {
+    for (auto _: state) {
         shmap_string_foostats_ext->clear();
         for (int i = 0; i < el_num; ++i) {
             shmaps::String s(std::to_string(i).append(long_str).c_str(),
-                            *shmaps::seg_alloc);
+                             *shmaps::seg_alloc);
             res = shmap_string_foostats_ext->set(s,
                                                  FooStatsExtShared(i, s.c_str(), s.c_str()),
                                                  false,
@@ -164,14 +160,13 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_Set_StringFooStatsExt)(benchmark::State &st) 
 
 }
 
-BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_StringFooStatsExt)(benchmark::State &st) {
+BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_StringFooStatsExt)(benchmark::State &state) {
     bool res;
     FooStatsExtShared fse;
-    while (st.KeepRunning()) {
+    for (auto _: state) {
         shmap_string_foostats_ext->clear();
         for (int i = 0; i < el_num; ++i) {
-            shmaps::String s(std::to_string(i).append(long_str).c_str(),
-                            *shmaps::seg_alloc);
+            shmaps::String s(std::to_string(i).append(long_str).c_str(), *shmaps::seg_alloc);
             res = shmap_string_foostats_ext->set(s,
                                                  FooStatsExtShared(i, s.c_str(), s.c_str()),
                                                  false,
@@ -184,9 +179,9 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_StringFooStatsExt)(benchmark::State &s
 }
 
 /*
-BENCHMARK_F(ShMapFixture, BM_ShMap_Add_String_SetString)(benchmark::State &st) {
+BENCHMARK_F(ShMapFixture, BM_ShMap_Add_String_SetString)(benchmark::State &state) {
     bool res;
-    while (st.KeepRunning()) {
+    for (auto _ : state) {
         for (int i = 0; i < el_num; ++i) {
             shmaps::LockType lock(shmap_string_set_string->mutex());
             res = shmap_string_set_string->add(std::to_string(i), std::to_string(i), el_expires);
@@ -196,9 +191,9 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_Add_String_SetString)(benchmark::State &st) {
 }
 
 
-BENCHMARK_F(ShMapFixture, BM_ShMap_Get_String_SetString)(benchmark::State &st) {
+BENCHMARK_F(ShMapFixture, BM_ShMap_Get_String_SetString)(benchmark::State &state) {
     bool res;
-    while (st.KeepRunning()) {
+    for (auto _ : state) {
         for (int i = 0; i < el_num; ++i) {
             std::set<std::string> res_check = {std::to_string(i)};
             std::set<std::string> ss;
@@ -210,9 +205,9 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_Get_String_SetString)(benchmark::State &st) {
 }
 
 
-BENCHMARK_F(ShMapFixture, BM_ShMap_Add_String_SetInt)(benchmark::State &st) {
+BENCHMARK_F(ShMapFixture, BM_ShMap_Add_String_SetInt)(benchmark::State &state) {
     bool res;
-    while (st.KeepRunning()) {
+    for (auto _ : state) {
         for (int i = 0; i < el_num; ++i) {
             shmaps::LockType lock(shmap_string_set_int->mutex());
             res = shmap_string_set_int->add(std::to_string(i), i);
@@ -221,9 +216,9 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_Add_String_SetInt)(benchmark::State &st) {
     }
 }
 
-BENCHMARK_F(ShMapFixture, BM_ShMap_Get_String_SetInt)(benchmark::State &st) {
+BENCHMARK_F(ShMapFixture, BM_ShMap_Get_String_SetInt)(benchmark::State &state) {
     bool res;
-    while (st.KeepRunning()) {
+    for (auto _ : state) {
         for (int i = 0; i < el_num; ++i) {
             std::set<int> res_check = {i};
             std::set<int> si;
