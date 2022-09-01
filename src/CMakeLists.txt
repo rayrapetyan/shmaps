@@ -1,4 +1,4 @@
-project(shmaps)
+project(reset)
 
 set(CMAKE_VERBOSE_MAKEFILE "ON")
 
@@ -13,7 +13,7 @@ else ()
     set(CMAKE_CXX_FLAGS "-O2 -g -DNDEBUG")
 endif ()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -Wall")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -Wall -stdlib=libc++")
 
 include_directories(/usr/local/include)
 link_directories(/usr/local/lib)
@@ -25,5 +25,7 @@ add_subdirectory(test)
 
 set(SOURCE_FILES
         reset.cpp
-        )
+)
 add_executable(reset ${SOURCE_FILES})
+
+target_link_libraries(reset pthread rt)

@@ -1,5 +1,5 @@
-#ifndef BENCH_SHMEM_SHMAP_H
-#define BENCH_SHMEM_SHMAP_H
+#ifndef SHMAPS_BENCH_SHMAPS_H
+#define SHMAPS_BENCH_SHMAPS_H
 
 #include <string>
 
@@ -43,4 +43,4 @@ public:
     shmaps::String s2;
 };
 
-#endif //BENCH_SHMEM_SHMAP_H
+#endif //SHMAPS_BENCH_SHMAPS_H

@@ -1,4 +1,8 @@
-project(bench_shmem)
+project(bench)
+
+set(CMAKE_CXX_STANDARD 17)
+
+include_directories(/ara/devel/adplatform/adpx/deps/libcuckoo)
 
 set(SOURCE_FILES
         conf.cpp
@@ -9,10 +13,9 @@ set(SOURCE_FILES
 )
 
 find_package(benchmark REQUIRED)
-find_package(hiredis)
 
-add_executable(bench_shmem ${SOURCE_FILES})
+add_executable(bench ${SOURCE_FILES})
 
-set(CMAKE_CXX_FLAGS "-O2 -g -DNDEBUG -stdlib=libc++")
+set(CMAKE_CXX_FLAGS "-O2 -g -DNDEBUG -stdlib=libc++ -DSHMAPS_SEG_SIZE=2147483648")
 
-target_link_libraries(bench_shmem benchmark hiredis pthread rt)
+target_link_libraries(bench benchmark hiredis pthread rt)

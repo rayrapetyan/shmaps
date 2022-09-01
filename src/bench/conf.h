@@ -1,11 +1,11 @@
-#ifndef BENCH_SHMEM_BENCH_CONF_H
-#define BENCH_SHMEM_BENCH_CONF_H
+#ifndef SHMAPS_BENCH_CONF_H
+#define SHMAPS_BENCH_CONF_H
 
 #include <sys/types.h>
 
 const int el_expires = 2;
-const int el_num = 50000;
+const int el_num = 1 * 1024 * 1024;
 
 size_t get_memory_size();
 
-#endif //BENCH_SHMEM_BENCH_CONF_H
+#endif //SHMAPS_BENCH_CONF_H
