@@ -1,9 +1,4 @@
+#ifndef SHMAPS_BENCH_REDIS_H
+#define SHMAPS_BENCH_REDIS_H
 
-#ifndef BENCH_SHMEM_REDIS_H
-#define BENCH_SHMEM_REDIS_H
-
-
-
-
-
-#endif //BENCH_SHMEM_REDIS_H
+#endif //SHMAPS_BENCH_REDIS_H

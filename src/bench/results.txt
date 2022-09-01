@@ -1,23 +1,29 @@
-Run on (1 X 3099.97 MHz CPU )
-2017-05-25 15:51:11
-----------------------------------------------------------------------------------------------
-Benchmark                                                       Time           CPU Iterations
-----------------------------------------------------------------------------------------------
-ShMapFixture/BM_ShMap_Set_IntInt                         41090918 ns   39231125 ns         16
-ShMapFixture/BM_ShMap_SetGet_IntInt                      40682966 ns   40680375 ns         16
-ShMapFixture/BM_ShMap_Set_IntFooStats                    32734634 ns   32733381 ns         21
-ShMapFixture/BM_ShMap_SetGet_IntFooStats                 41530237 ns   41522824 ns         17
-ShMapFixture/BM_ShMap_Set_StringInt                     331019562 ns  330812333 ns          3
-ShMapFixture/BM_ShMap_SetGet_StringInt                  361568554 ns  361565000 ns          2
-ShMapFixture/BM_ShMap_Set_StringFooStatsExt             784102164 ns  784092000 ns          1
-ShMapFixture/BM_ShMap_SetGet_StringFooStatsExt          989477925 ns  986669000 ns          1
-LibCuckooFixture/BM_LibCuckoo_Set_IntInt                 11246051 ns   11244613 ns         62
-LibCuckooFixture/BM_LibCuckoo_SetGet_IntInt              14147902 ns   14138917 ns         48
-LibCuckooFixture/BM_LibCuckoo_Set_IntFooStats            12120170 ns   12118561 ns         57
-LibCuckooFixture/BM_LibCuckoo_SetGet_IntFooStats         14802490 ns   14802340 ns         47
-LibCuckooFixture/BM_LibCuckoo_Set_StringInt              51515229 ns   51510857 ns         14
-LibCuckooFixture/BM_LibCuckoo_SetGet_StringInt           71016198 ns   71002200 ns         10
-LibCuckooFixture/BM_LibCuckoo_Set_StringFooStatsExt      86271555 ns   86241778 ns          9
-LibCuckooFixture/BM_LibCuckoo_SetGet_StringFooStatsExt  108254299 ns  108252000 ns          8
-RedisFixture/BM_RedisSetInt                            1968465849 ns  900845000 ns          1
-RedisFixture/BM_RedisSetGetInt                         3710239670 ns 1664056000 ns          1
+Run on (16 X 4900 MHz CPU s)
+CPU Caches:
+  L1 Data 48 KiB (x8)
+  L1 Instruction 32 KiB (x8)
+  L2 Unified 512 KiB (x8)
+  L3 Unified 16384 KiB (x1)
+Load Average: 1.22, 1.01, 0.85
+***WARNING*** CPU scaling is enabled, the benchmark real time measurements may be noisy and will incur extra overhead.
+-------------------------------------------------------------------------------------------------
+Benchmark                                                       Time             CPU   Iterations
+-------------------------------------------------------------------------------------------------
+LibCuckooFixture/BM_LibCuckoo_Set_IntInt                     39.8 ms         39.8 ms           13
+LibCuckooFixture/BM_LibCuckoo_SetGet_IntInt                  63.5 ms         63.5 ms           10
+LibCuckooFixture/BM_LibCuckoo_Set_IntFooStats                78.8 ms         78.8 ms           10
+LibCuckooFixture/BM_LibCuckoo_SetGet_IntFooStats             91.4 ms         91.4 ms            6
+LibCuckooFixture/BM_LibCuckoo_Set_StringInt                   544 ms          544 ms            1
+LibCuckooFixture/BM_LibCuckoo_SetGet_StringInt                640 ms          640 ms            1
+LibCuckooFixture/BM_LibCuckoo_Set_StringFooStatsExt          1454 ms         1454 ms            1
+LibCuckooFixture/BM_LibCuckoo_SetGet_StringFooStatsExt       1543 ms         1543 ms            1
+ShMapFixture/BM_ShMap_Set_IntInt                              336 ms          336 ms            2
+ShMapFixture/BM_ShMap_SetGet_IntInt                           380 ms          380 ms            2
+ShMapFixture/BM_ShMap_Set_IntFooStats                         355 ms          355 ms            2
+ShMapFixture/BM_ShMap_SetGet_IntFooStats                      397 ms          397 ms            2
+ShMapFixture/BM_ShMap_Set_StringInt                          1961 ms         1961 ms            1
+ShMapFixture/BM_ShMap_SetGet_StringInt                       2094 ms         2094 ms            1
+ShMapFixture/BM_ShMap_Set_StringFooStatsExt                  4532 ms         4532 ms            1
+ShMapFixture/BM_ShMap_SetGet_StringFooStatsExt               4984 ms         4984 ms            1
+RedisFixture/BM_RedisSetInt                                 10660 ms         5697 ms            1
+RedisFixture/BM_RedisSetGetInt                              19798 ms        11064 ms            1

@@ -16,7 +16,11 @@
 
 #define SHMEM_SEG_NAME "SharedMemorySegment"
 
-#define INIT_SEG_SIZE 1024 * 1024 * 1024
+// you should define SHMAPS_SEG_SIZE on a building stage (e.g. cmake -DSHMAPS_SEG_SIZE=2147483648 ..)
+#ifndef SHMAPS_SEG_SIZE
+#define SHMAPS_SEG_SIZE 1024 * 1024 * 1024 // 1GB
+#endif
+
 #define INIT_MAP_SIZE libcuckoo::DEFAULT_SIZE
 
 namespace bip = boost::interprocess;
@@ -25,6 +29,7 @@ namespace shmaps {
     typedef bip::managed_shared_memory::segment_manager SegmentManager;
     typedef bip::allocator<void, SegmentManager> VoidAllocator;
     typedef bip::allocator<char, SegmentManager> CharAllocator;
+    // TODO: redeclare String so app doesn't crash if String is defined before init() is called (null allocator)
     typedef bip::basic_string<char, std::char_traits<char>, CharAllocator> String;
 
     typedef std::chrono::time_point<std::chrono::steady_clock> TimePoint;
@@ -41,18 +46,28 @@ namespace shmaps {
     inline VoidAllocator *seg_alloc = nullptr;
 
     inline void reset() {
+        /*
+         do not call if you have static or other active shared tables in your app - they'll all become invalidated and
+         your app will hang\crash; so you should either call reset() before anything else or restart app immediately
+         after reset()
+        */
         bip::shared_memory_object::remove(SHMEM_SEG_NAME);
         segment_ = nullptr;
         return;
     }
 
+    inline uint64_t segment_size() {
+        assert(segment_);
+        return segment_->get_size();
+    }
+
     inline uint64_t grow(uint64_t add_size) {
         assert(segment_);
-        uint cur_seg_size = segment_->get_size();
+        uint cur_seg_size = segment_size();
         delete segment_;
         bip::managed_shared_memory::grow(shmem_seg_name.c_str(), add_size);
         segment_ = new bip::managed_shared_memory(bip::open_only, shmem_seg_name.c_str());
-        assert(segment_->get_size() == cur_seg_size + add_size);
+        assert(segment_size() == cur_seg_size + add_size);
         return cur_seg_size + add_size;
     }
 
@@ -62,8 +77,9 @@ namespace shmaps {
                 segment_ = new bip::managed_shared_memory(bip::open_or_create, SHMEM_SEG_NAME, size);
                 assert(segment_ != nullptr);
             }
-            catch (...) {
-                std::cout << "error creating shared memory segment" << std::endl;
+            catch (const std::exception &exc) {
+                std::cout << "error creating shared memory segment: " << exc.what() << std::endl;
+                // try again
                 reset();
                 segment_ = new bip::managed_shared_memory(bip::open_or_create, SHMEM_SEG_NAME, size);
             }
@@ -71,18 +87,18 @@ namespace shmaps {
             seg_alloc = new VoidAllocator(segment_->get_segment_manager());
             assert(seg_alloc != nullptr);
         }
-        if (segment_->get_size() < size) {
-            grow(size - segment_->get_size());
-            assert(segment_->get_size() == size);
-            std::cout << "shmaps segment size has changed, restart your app\n" << std::endl;
+        if (segment_size() < size) {
+            /*
+             this happens on the very first run when there is a static map defined in your app,
+             and it was instantiated with the default SHMAPS_SEG_SIZE;
+             then you've called init() explicitly requesting a larger segment size.
+            */
+            grow(size - segment_size());
+            assert(segment_size() == size);
+            std::cout << "shmaps segment size has been changed, restart your app\n" << std::endl;
             exit(0);
         }
-        return segment_->get_size();
-    }
-
-    inline uint64_t size() {
-        assert(segment_);
-        return segment_->get_size();
+        return segment_size();
     }
 
     inline TimePoint now() {
@@ -111,7 +127,7 @@ namespace shmaps {
             std::atomic<uint64_t> miss;
         } read;
 
-        void info() {
+        void print() {
             fprintf(stdout, "    stats\n"
                             "        inserts: %lu (%lu%% expiring, %lu%% errors)\n"
                             "        updates: %lu\n"
@@ -130,8 +146,7 @@ namespace shmaps {
         }
     };
 
-
-    template<class PayloadType>  // PayloadType could be a set or int or complex struct (with strings)
+    template<class PayloadType>  // PayloadType could be a simple int, a set or a complex struct (with strings)
     class MappedValType {
     public:
         MappedValType() {}
@@ -180,7 +195,6 @@ namespace shmaps {
         Seconds ttl_;
     };
 
-
     template<class KeyType, class PayloadType, class Hash = boost::hash<KeyType>, class Pred = std::equal_to<KeyType>>
     class Map {
     public:
@@ -191,9 +205,12 @@ namespace shmaps {
         Map() {};
 
         explicit Map(const std::string &name) : map_name_(name) {
-            if (segment_ == nullptr) { // static map, ctor called before main (init).
-                init(INIT_SEG_SIZE);
+            if (segment_ == nullptr) {
+                // static map: ctor called before main()
+                // normal map: created before init()
+                init(SHMAPS_SEG_SIZE);
             }
+            assert(segment_ != nullptr);
             map_ = segment_->find_or_construct<MapImpl>(map_name_.data())(
                     INIT_MAP_SIZE,
                     Hash(),
@@ -202,20 +219,20 @@ namespace shmaps {
             assert(map_ != nullptr);
             stats = segment_->find_or_construct<Stats>(std::string(name + "stats").data())();
             assert(stats != nullptr);
-            info();
+            print_stats();
         }
 
         ~Map() {
         }
 
-        void info() {
+        void print_stats() {
             fprintf(stdout, "shared memory segment of size %luMB (%luMB free)\n"
                             "    map %s (elements: %lu)\n",
-                    segment_->get_size() / (1 * 1024 * 1024),
+                    segment_size() / (1 * 1024 * 1024),
                     segment_->get_free_memory() / (1 * 1024 * 1024),
                     map_name_.c_str(),
                     map_->size());
-            stats->info();
+            stats->print();
         }
 
         void destroy() {
@@ -243,11 +260,7 @@ namespace shmaps {
             return map_->lock_table();
         }
 
-        bool set(const KeyType &k, const PayloadType &pl, bool create_only = true,
-                 Seconds expires = Seconds(0)) {
-#ifdef MOCK
-            return false;
-#endif
+        bool set(const KeyType &k, const PayloadType &pl, bool create_only = true, Seconds expires = Seconds(0)) {
             bool existing = false;
             if (!map_->update_fn(k, [&](MappedValType<PayloadType> &val) {
                 if (val.expired()) {
@@ -284,9 +297,6 @@ namespace shmaps {
         }
 
         bool get(const KeyType &k, PayloadType *pl) {
-#ifdef MOCK
-            return false;
-#endif
             bool found = false;
             map_->update_fn(k, [&](MappedValType<PayloadType> &val) {
                 found = !val.expired();
@@ -300,9 +310,6 @@ namespace shmaps {
         }
 
         bool exists(const KeyType &k) {
-#ifdef MOCK
-            return false;
-#endif
             bool found = false;
             map_->find_fn(k, [&](const MappedValType<PayloadType> &val) {
                 found = !val.expired();
@@ -317,20 +324,22 @@ namespace shmaps {
         }
 
         template<typename K, typename F>
-        auto exec(const K &key, F fn, PayloadType *foo=nullptr) -> decltype(fn(foo)) {
+        auto exec(const K &key, F fn, PayloadType *foo = nullptr) -> decltype(fn(foo)) {
             /*
             // TODO!!!!!!!!
             decltype(fn(foo)) a;
             return a;*/
             bool found = false;
-            auto res = map_->exec_fn(key, [&](MappedValType<PayloadType> *val, PayloadType *foo=nullptr) -> decltype(fn(foo)) {
-                found = val && !val->expired();
-                if (found) {
-                    return fn(&val->payload());
-                } else {
-                    return fn(nullptr);
-                }
-            });
+            auto res = map_->exec_fn(
+                    key,
+                    [&](MappedValType<PayloadType> *val, PayloadType *foo = nullptr) -> decltype(fn(foo)) {
+                        found = val && !val->expired();
+                        if (found) {
+                            return fn(&val->payload());
+                        } else {
+                            return fn(nullptr);
+                        }
+                    });
             return res;
         }
 
@@ -352,16 +361,17 @@ namespace shmaps {
             */
             const uint purge_elements = 4;
             uint purged_elements = map_->erase_random_fn(purge_elements, [&](MappedValType<PayloadType> &val) {
-                    ++stats->write.purge.total;
-                    return val.expired();
-                });
+                ++stats->write.purge.total;
+                return val.expired();
+            });
             stats->write.purge.hit += purged_elements;
             return;
         }
     };
 
     template<class KeyType, class SetValType, class Hash = boost::hash<KeyType>, class Pred = std::equal_to<KeyType>>
-    class MapSet : public Map<KeyType, bip::set<SetValType, std::less<SetValType>, bip::allocator<SetValType, SegmentManager>>, Hash, Pred> {
+    class MapSet
+            : public Map<KeyType, bip::set<SetValType, std::less<SetValType>, bip::allocator<SetValType, SegmentManager>>, Hash, Pred> {
         typedef bip::set<SetValType, std::less<SetValType>, bip::allocator<SetValType, SegmentManager>> PayloadType;
         using Map<KeyType, PayloadType, Hash, Pred>::map_;
         using Map<KeyType, PayloadType, Hash, Pred>::stats;
@@ -377,10 +387,7 @@ namespace shmaps {
         ~MapSet() {};
 
         bool add(const KeyType &k, const SetValType &pl_elem, Seconds expires = Seconds(0)) {
-#ifdef MOCK
-            return false;
-#endif
-            // add one or more members to a set
+            // add one or more members into a set
             if (!map_->update_fn(k, [&](MappedValType<PayloadType> &val) {
                 if (val.expired()) {
                     val.payload().clear();
@@ -416,9 +423,6 @@ namespace shmaps {
         }
 
         bool members(const KeyType &k, std::set<SetValType> *pl) {
-#ifdef MOCK
-            return false;
-#endif
             bool found = false;
             map_->update_fn(k, [&](MappedValType<PayloadType> &val) {
                 if (!val.expired()) {
@@ -434,9 +438,6 @@ namespace shmaps {
         }
 
         bool is_member(const KeyType &k, const SetValType pl_val) {
-#ifdef MOCK
-            return false;
-#endif
             bool found = false;
             map_->update_fn(k, [&](MappedValType<PayloadType> &val) {
                 found = !val.expired() && (val.payload().find(pl_val) != val.payload().end());

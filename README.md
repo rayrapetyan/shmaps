@@ -1,30 +1,39 @@
 # shmaps
-Persistent shared memory key-value storage supporting customized STL containers and TTL.
+Persistent shared memory key-value storage supporting customized STL containers with keys expiration capabilities.
 
 The proposed solution allows you to organize multiple independent mapping (key-value) storages in a shared memory segment.
+So after your processes exited, data stays in the memory and can be re-used on the next run.
 
-Based on a boost/interprocess and libcuckoo lock-free map.
+Based on a boost/interprocess and libcuckoo lock-free map, so you shouldn't worry about access synchronization.
 
-Limitations:
-- you can't use STL containers for key or value type (e.g. instead of std::string you should use shmem::String);
+## Limitations:
+- if you want to use your own memory-allocating data types, you should always call `shmaps::init()` from ctor and use `shmaps::seg_alloc` as allocator;
+- TODO: you can't declare shmaps::String before init() is called (because `shmaps::seg_alloc` is not initialized yet);
+- TODO: if one of the processes crash in the middle of accessing a shared map, it may leave it locked forever.
 
-## Dependencies
+# Dependencies
 Currently only clang 10+ with llvm's c++ lib is supported. So everything should work out of the box in FreeBSD 11+.
+With g++ (tested on g++ 10.2) compilation fails with a lot of errors like:
+    
+`error: cannot convert ‘boost::interprocess::offset_ptr`
 
-You need to install boost libraries, e.g. in FreeBSD:
+### FreeBSD
+You need to install boost libraries:
 
     pkg install boost-libs
 
-For Linux-based OS, please install following dependencies (tested in Ubuntu 18.04):
+### Linux
+For Linux-based OS, please install following dependencies (tested in `Debian bullseye`):
 
     apt install libboost-dev
-    apt install cmake clang-10 libc++-10-dev libc++abi-10-dev
+    apt install cmake clang-11 libc++-11-dev libc++abi-11-dev
 
-Set clang++-10 as default c++ compiler:
+Set clang++-11 as a default c++ compiler:
 
-    update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++-10 60
+    update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++-11 60
 
-Then you should be able to compile your code with `-stdlib=libc++` option.
+Then you should be able to compile your code with `-stdlib=libc++` option (this is a libcuckoo's requirement).
+See `Dockerfile` for a detailed step-by-step installation.
 
 ### libcuckoo
 A custom version of libcuckoo (with "erase random" support) required.
@@ -38,43 +47,49 @@ Packages required:
 
     benchmark redis hiredis
 
-A running instance of redis required
+A running instance of redis-server required
 
 ## Compilation
 shmaps is implemented as a header-only library, just include shmaps.hh into your sources.
 
 ## Init
+The recommended way to init shared memory is to specify it's size (in bytes) on a building stage, e.g.:
+
+    -DSHMAPS_SEG_SIZE=2147483648
+
+Another approach would be to use an explicit `init()` call. This is not recommended because depending on the order of
+initialization (e.g. static maps) this may lead to the app restart requirement (due to the shared segment size change).
+
 ```
-    #include "shmaps/shmaps.hh"
-    namespace shmem = shared_memory;
-    const long est_shmem_size = 1024 * 1024 * 100; // 100MB, make sure to allocate at least x2 of size expected to be used.
-    shmem::init(est_shmem_size);
+    #include "shmaps/shmaps.hh"    
+    const long est_shmem_size = 1024 * 1024 * 100; // 100MB, make sure to allocate at least x2 of size you plan to use.
+    shmaps::init(est_shmem_size);
 ```
 
-## Example 1: shared map of int-s.
+## Example 1: shared map of `int`s.
 ```
     const int el_expires = 2;
     bool res;
     int k = 100;
     int val;
     FooStatsExt fse;
-    shmem::String sk(std::to_string(k).c_str(), *shmem::seg_alloc);
+    shmaps::String sk(std::to_string(k).c_str(), *shmaps::seg_alloc);
     
-    shmem::Map<shmem::String, int> *shmap_string_int = new shmem::Map<shmem::String, int>("ShMap_String_Int");
+    shmaps::Map<shmaps::String, int> *shmap_string_int = new shmaps::Map<shmaps::String, int>("ShMap_String_Int");
     res = shmap_string_int->set(sk, k, false, std::chrono::seconds(el_expires));
     assert(res);
     res = shmap_string_int->get(sk, &val);
     assert(res && val == k);
 ```
 
-## Example 2: shared map of basic structs.
+## Example 2: shared map of basic `struct`s.
 ```
     const int el_expires = 2;
     bool res;
     int k = 100;
     int val;
     FooStatsExt fse;
-    shmem::String sk(std::to_string(k).c_str(), *shmem::seg_alloc);
+    shmaps::String sk(std::to_string(k).c_str(), *shmaps::seg_alloc);
     
     class FooStats {
     public:
@@ -93,7 +108,7 @@ shmaps is implemented as a header-only library, just include shmaps.hh into your
         float rev;
     };
     
-    shmem::Map<int, FooStats> *shmap_int_foostats = new shmem::Map<int, FooStats>("ShMap_Int_FooStats");
+    shmaps::Map<int, FooStats> *shmap_int_foostats = new shmaps::Map<int, FooStats>("ShMap_Int_FooStats");
     res = shmap_int_foostats->set(k, FooStats(k, 2, 3.0), false, std::chrono::seconds(el_expires));
     assert(res);
     FooStats fs;
@@ -101,28 +116,28 @@ shmaps is implemented as a header-only library, just include shmaps.hh into your
     assert(res && fs.k == k);
 ```
 
-## Example 3: shared map of advanced structs (containing shmem::String-s):
+## Example 3: shared map of advanced structs (containing `shmaps::String`s):
 ```
     const int el_expires = 2;
     bool res;
     int k = 100;
     int val;
     FooStatsExt fse;
-    shmem::String sk(std::to_string(k).c_str(), *shmem::seg_alloc);
+    shmaps::String sk(std::to_string(k).c_str(), *shmaps::seg_alloc);
     
     class FooStatsExt {
     public:
-        FooStatsExt() : s1(*shmem::seg_alloc), s2(*shmem::seg_alloc) {}
+        FooStatsExt() : s1(*shmaps::seg_alloc), s2(*shmaps::seg_alloc) {}
         FooStatsExt(const int i1, const char *c1, const char *c2) :
-                i1(i1), s1(c1, *shmem::seg_alloc), s2(c2, *shmem::seg_alloc) {}
+                i1(i1), s1(c1, *shmaps::seg_alloc), s2(c2, *shmaps::seg_alloc) {}
         ~FooStatsExt() {}
 
         int i1;
-        shmem::String s1;
-        shmem::String s2;
+        shmaps::String s1;
+        shmaps::String s2;
     };
     
-    shmem::Map <shmem::String, FooStatsExt> *shmap_string_foostats_ext = new shmem::Map<shmem::String, FooStatsExt>(
+    shmaps::Map <shmaps::String, FooStatsExt> *shmap_string_foostats_ext = new shmaps::Map<shmaps::String, FooStatsExt>(
             "ShMap_String_FooStatsExt");
     res = shmap_string_foostats_ext->set(sk,
                                          FooStatsExt(k, sk.c_str(), sk.c_str()),
@@ -140,9 +155,9 @@ shmaps is implemented as a header-only library, just include shmaps.hh into your
     int k = 100;
     int val;
     FooStatsExt fse;
-    shmem::String sk(std::to_string(k).c_str(), *shmem::seg_alloc);
+    shmaps::String sk(std::to_string(k).c_str(), *shmaps::seg_alloc);
     
-    shmem::MapSet<shmem::String, int> *shmap_string_set_int = new shmem::MapSet<shmem::String, int>("ShMap_String_SetInt");
+    shmaps::MapSet<shmaps::String, int> *shmap_string_set_int = new shmaps::MapSet<shmaps::String, int>("ShMap_String_SetInt");
     res = shmap_string_set_int->add(sk, k);
     assert(res);
     res = shmap_string_set_int->is_member(sk, k);
@@ -153,24 +168,33 @@ shmaps is implemented as a header-only library, just include shmaps.hh into your
     assert(res && si == res_check1);
 ```
 
-## Example 5: shared map of advanced sets (`bip::set<shmem::String>`):
+## Example 5: shared map of advanced sets (`bip::set<shmaps::String>`):
 ```
     const int el_expires = 2;
     bool res;
     int k = 100;
     int val;
     FooStatsExt fse;
-    shmem::String sk(std::to_string(k).c_str(), *shmem::seg_alloc);
+    shmaps::String sk(std::to_string(k).c_str(), *shmaps::seg_alloc);
     
-    shmem::MapSet <shmem::String, shmem::String> *shmap_string_set_string = new shmem::MapSet<shmem::String, shmem::String>("ShMap_String_SetString");
-    res = shmap_string_set_string->add(sk, shmem::String(sk.c_str(), *shmem::seg_alloc), std::chrono::seconds(el_expires));
+    shmaps::MapSet <shmaps::String, shmaps::String> *shmap_string_set_string = new shmaps::MapSet<shmaps::String, shmaps::String>("ShMap_String_SetString");
+    res = shmap_string_set_string->add(sk, shmaps::String(sk.c_str(), *shmaps::seg_alloc), std::chrono::seconds(el_expires));
     assert(res);
-    std::set<shmem::String> res_check2 = {shmem::String(sk.c_str(), *shmem::seg_alloc)};
-    std::set<shmem::String> ss;
+    std::set<shmaps::String> res_check2 = {shmaps::String(sk.c_str(), *shmaps::seg_alloc)};
+    std::set<shmaps::String> ss;
     res = shmap_string_set_string->members(sk, &ss);
     assert(res && ss == res_check2);
 ```
 
+## Build and run shmaps tests and benchmarks in the isolated env
+    
+    cd shmaps
+    docker build -t shmaps:latest .
+    docker run --rm --name=shmaps --net=host -v /dev/shm:/dev/shm shmaps:latest bash -c "./build/src/test/test"
+    docker run --rm --name=shmaps --net=host -v /dev/shm:/dev/shm shmaps:latest bash -c "./build/src/reset"
+    docker run --rm --name=shmaps --net=host -v /dev/shm:/dev/shm shmaps:latest bash -c "./build/src/bench/bench --benchmark_time_unit=ms"
+
+## Credits
 Written by Robert Ayrapetyan (robert.ayrapetyan@gmail.com).
 
 No copyright. This work is dedicated to the public domain.

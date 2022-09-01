@@ -1,5 +1,5 @@
-#ifndef BENCH_SHMEM_LIBCUCKOO_H
-#define BENCH_SHMEM_LIBCUCKOO_H
+#ifndef SHMAPS_BENCH_LIBCUCKOO_H
+#define SHMAPS_BENCH_LIBCUCKOO_H
 
 #include <string>
 
@@ -41,4 +41,4 @@ public:
     std::string s2;
 };
 
-#endif //BENCH_SHMEM_LIBCUCKOO_H
+#endif //SHMAPS_BENCH_LIBCUCKOO_H

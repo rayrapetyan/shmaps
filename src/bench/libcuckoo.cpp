@@ -2,11 +2,11 @@
 
 #include <benchmark/benchmark.h>
 
-#include <iostream>
-
 #include <libcuckoo/cuckoohash_map.hh>
 
 #include "./conf.h"
+
+const std::string long_str = std::string(100, 'a');
 
 class LibCuckooFixture : public ::benchmark::Fixture {
 public:
@@ -49,9 +49,9 @@ public:
     LibCuckooStringFooStatsExt *libcuckoo_string_foostats_ext;
 };
 
-BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_Set_IntInt)(benchmark::State &st) {
+BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_Set_IntInt)(benchmark::State &state) {
     bool res;
-    while (st.KeepRunning()) {
+    for (auto _ : state) {
         libcuckoo_int_int->clear();
         for (int i = 0; i < el_num; ++i) {
             res = libcuckoo_int_int->insert(i, i);
@@ -60,10 +60,10 @@ BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_Set_IntInt)(benchmark::State &st) {
     }
 }
 
-BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_SetGet_IntInt)(benchmark::State &st) {
+BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_SetGet_IntInt)(benchmark::State &state) {
     bool res;
     int val;
-    while (st.KeepRunning()) {
+    for (auto _ : state) {
         libcuckoo_int_int->clear();
         for (int i = 0; i < el_num; ++i) {
             res = libcuckoo_int_int->insert(i, i);
@@ -74,9 +74,9 @@ BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_SetGet_IntInt)(benchmark::State &st) 
     }
 }
 
-BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_Set_IntFooStats)(benchmark::State &st) {
+BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_Set_IntFooStats)(benchmark::State &state) {
     bool res;
-    while (st.KeepRunning()) {
+    for (auto _ : state) {
         libcuckoo_int_foostats->clear();
         for (int i = 0; i < el_num; ++i) {
             res = libcuckoo_int_foostats->insert(i, FooStats(i, 2, 3.0));
@@ -85,10 +85,10 @@ BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_Set_IntFooStats)(benchmark::State &st
     }
 }
 
-BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_SetGet_IntFooStats)(benchmark::State &st) {
+BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_SetGet_IntFooStats)(benchmark::State &state) {
     bool res;
     FooStats fs;
-    while (st.KeepRunning()) {
+    for (auto _ : state) {
         libcuckoo_int_foostats->clear();
         for (int i = 0; i < el_num; ++i) {
             res = libcuckoo_int_foostats->insert(i, FooStats(i, 2, 3.0));
@@ -99,12 +99,12 @@ BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_SetGet_IntFooStats)(benchmark::State 
     }
 }
 
-BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_Set_StringInt)(benchmark::State &st) {
+BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_Set_StringInt)(benchmark::State &state) {
     bool res;
-    while (st.KeepRunning()) {
+    for (auto _ : state) {
         libcuckoo_string_int->clear();
         for (int i = 0; i < el_num; ++i) {
-            std::string s = std::to_string(i).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+            std::string s = std::to_string(i).append(long_str);
             res = libcuckoo_string_int->insert(s, i);
             assert(res);
         }
@@ -112,13 +112,13 @@ BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_Set_StringInt)(benchmark::State &st) 
 
 }
 
-BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_SetGet_StringInt)(benchmark::State &st) {
+BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_SetGet_StringInt)(benchmark::State &state) {
     bool res;
     int val;
-    while (st.KeepRunning()) {
+    for (auto _ : state) {
         libcuckoo_string_int->clear();
         for (int i = 0; i < el_num; ++i) {
-            std::string s = std::to_string(i).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+            std::string s = std::to_string(i).append(long_str);
             res = libcuckoo_string_int->insert(s, i);
             assert(res);
             res = libcuckoo_string_int->find(s.c_str(), val);
@@ -128,12 +128,12 @@ BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_SetGet_StringInt)(benchmark::State &s
 }
 
 
-BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_Set_StringFooStatsExt)(benchmark::State &st) {
+BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_Set_StringFooStatsExt)(benchmark::State &state) {
     bool res;
-    while (st.KeepRunning()) {
+    for (auto _ : state) {
         libcuckoo_string_foostats_ext->clear();
         for (int i = 0; i < el_num; ++i) {
-            std::string s = std::to_string(i).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+            std::string s = std::to_string(i).append(long_str);
             res = libcuckoo_string_foostats_ext->insert(s, FooStatsExtPlain(i, s.c_str(), s.c_str()));
             assert(res);
         }
@@ -141,13 +141,13 @@ BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_Set_StringFooStatsExt)(benchmark::Sta
 
 }
 
-BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_SetGet_StringFooStatsExt)(benchmark::State &st) {
+BENCHMARK_F(LibCuckooFixture, BM_LibCuckoo_SetGet_StringFooStatsExt)(benchmark::State &state) {
     bool res;
     FooStatsExtPlain fse;
-    while (st.KeepRunning()) {
+    for (auto _ : state) {
         libcuckoo_string_foostats_ext->clear();
         for (int i = 0; i < el_num; ++i) {
-            std::string s = std::to_string(i).append("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+            std::string s = std::to_string(i).append(long_str);
             res = libcuckoo_string_foostats_ext->insert(s, FooStatsExtPlain(i, s.c_str(), s.c_str()));
             assert(res);
             res = libcuckoo_string_foostats_ext->find(s.c_str(), fse);

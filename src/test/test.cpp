@@ -1,6 +1,10 @@
 #include "../../include/shmaps/shmaps.hh"
 
+#include<sys/wait.h>
+
 #include <random>
+#include <string>
+#include <thread>
 
 class FooStats {
 public:
@@ -37,19 +41,17 @@ public:
     shmaps::String s2;
 };
 
-static shmaps::Map<shmaps::String, int> *shmap_string_int_static = new shmaps::Map<shmaps::String, int>("ShMap_Static_String_Int");
+static shmaps::Map<shmaps::String, int> *shmap_string_int_static =
+        new shmaps::Map<shmaps::String, int>("ShMap_Static_String_Int");
 
 int main(int argc, char *argv[]) {
-    const uint64_t est_shmem_size = 1024 * 1024 * 2000; // make sure value here is x2 of what you get as "free" after tests passed
-    shmaps::init(est_shmem_size);
+    unsigned int num_wrk = 4;
+    std::cout << "worker " << num_wrk << " created" << std::endl;
 
-    unsigned int wrk = 4;
-    std::cout << "worker " << wrk << " created" << std::endl;
-
-    while (--wrk) {
+    while (--num_wrk) {
         pid_t pid = fork();
         if (pid == 0) {
-            std::cout << "worker " << wrk << " created" << std::endl;
+            std::cout << "worker " << num_wrk << " created" << std::endl;
             break;
         }
     }
@@ -59,7 +61,8 @@ int main(int argc, char *argv[]) {
     int k = 100;
     int val;
     FooStatsExt fse;
-    const std::string long_str= "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const std::string long_str = std::string(100, 'a');
+
     shmaps::String sk(std::to_string(k).append(long_str).c_str(), *shmaps::seg_alloc);
 
     res = shmap_string_int_static->set(sk, k, false, std::chrono::seconds(el_expires));
@@ -80,7 +83,7 @@ int main(int argc, char *argv[]) {
     res = shmap_int_foostats->get(k, &fs);
     assert(res && fs.k == k);
 
-    shmaps::Map <shmaps::String, FooStatsExt> *shmap_string_foostats_ext =
+    shmaps::Map<shmaps::String, FooStatsExt> *shmap_string_foostats_ext =
             new shmaps::Map<shmaps::String, FooStatsExt>("ShMap_String_FooStatsExt");
     res = shmap_string_foostats_ext->set(sk,
                                          FooStatsExt(k, sk.c_str(), sk.c_str()),
@@ -101,7 +104,7 @@ int main(int argc, char *argv[]) {
     res = shmap_string_set_int->members(sk, &si);
     assert(res && si == res_check1);
 
-    shmaps::MapSet <shmaps::String, shmaps::String> *shmap_string_set_string =
+    shmaps::MapSet<shmaps::String, shmaps::String> *shmap_string_set_string =
             new shmaps::MapSet<shmaps::String, shmaps::String>("ShMap_String_SetString");
     res = shmap_string_set_string->add(sk, shmaps::String(sk.c_str(), *shmaps::seg_alloc),
                                        std::chrono::seconds(el_expires));
@@ -111,8 +114,19 @@ int main(int argc, char *argv[]) {
     res = shmap_string_set_string->members(sk, &ss);
     assert(res && ss == res_check2);
 
-    shmaps::Map <uint64_t, uint64_t> *shmap_stress = new shmaps::Map<uint64_t, uint64_t>("ShMap_Stress");
-    shmaps::Map <uint64_t, FooStatsExt> *shmapset_stress = new shmaps::Map<uint64_t, FooStatsExt>("ShMapSet_Stress");
+    // expiration test
+    shmaps::Map<shmaps::String, int> *shmaps_exp = new shmaps::Map<shmaps::String, int>("ShMap_Expiration");
+    res = shmaps_exp->set(sk, 166, 2);
+    assert(res);
+    res = shmaps_exp->get(sk, &val);
+    assert(res && val == 166);
+    std::this_thread::sleep_for(std::chrono::milliseconds(2000));
+    res = shmaps_exp->get(sk, &val);
+    assert(!res);
+
+    // stress test
+    shmaps::Map<uint64_t, uint64_t> *shmap_stress = new shmaps::Map<uint64_t, uint64_t>("ShMap_Stress");
+    shmaps::Map<uint64_t, FooStatsExt> *shmapset_stress = new shmaps::Map<uint64_t, FooStatsExt>("ShMapSet_Stress");
 
     std::random_device rnd_dev;
     std::mt19937_64 rnd_gen(rnd_dev());
@@ -134,9 +148,11 @@ int main(int argc, char *argv[]) {
         if (kstress % 10000 == 0)
             std::cout << kstress << std::endl;
     }
-    shmap_stress->info();
+    shmap_stress->print_stats();
 
     std::cout << "process finished" << std::endl;
+
+    while(wait(NULL) > 0); // wait till all children exited (otherwise libcuckoo map may stay locked forever)
 
     return 0;
 }

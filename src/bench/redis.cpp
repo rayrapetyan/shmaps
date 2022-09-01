@@ -38,9 +38,9 @@ public:
 
 };
 
-BENCHMARK_F(RedisFixture, BM_RedisSetInt)(benchmark::State &st) {
+BENCHMARK_F(RedisFixture, BM_RedisSetInt)(benchmark::State &state) {
     redisReply *reply;
-    while (st.KeepRunning()) {
+    for (auto _ : state) {
         reply = static_cast<redisReply *>(redisCommand(c, "FLUSHDB"));
         assert(reply->type == REDIS_REPLY_STATUS && std::string(reply->str) == "OK");
         for (int i = 0; i < el_num; ++i) {
@@ -51,9 +51,9 @@ BENCHMARK_F(RedisFixture, BM_RedisSetInt)(benchmark::State &st) {
     }
 }
 
-BENCHMARK_F(RedisFixture, BM_RedisSetGetInt)(benchmark::State &st) {
+BENCHMARK_F(RedisFixture, BM_RedisSetGetInt)(benchmark::State &state) {
     redisReply *reply;
-    while (st.KeepRunning()) {
+    for (auto _ : state) {
         reply = static_cast<redisReply *>(redisCommand(c, "FLUSHDB"));
         assert(reply->type == REDIS_REPLY_STATUS && std::string(reply->str) == "OK");
         for (int i = 0; i < el_num; ++i) {
