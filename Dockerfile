@@ -5,8 +5,8 @@ ARG APP_HOME=/opt/adp/shmaps
 
 ARG BOOST_VER=1_80_0
 
-WORKDIR $APP_HOME
-COPY . .
+WORKDIR $APP_HOME/deps
+COPY requirements.apt .
 
 RUN apt update \
     && apt install -y $(awk '{print $1}' requirements.apt) \
@@ -33,6 +33,10 @@ RUN git clone --branch v1.7.0 https://github.com/google/benchmark.git benchmark 
     && cmake -E make_directory "build" \
     && cmake -DCMAKE_BUILD_TYPE=Release -DBENCHMARK_ENABLE_TESTING=OFF -DBENCHMARK_USE_LIBCXX=ON -S . -B "build" \
     && cmake --build "build" --config Release --target install
+
+WORKDIR $APP_HOME
+
+COPY . .
 
 RUN cmake -E make_directory "build" \
     && cmake -DCMAKE_BUILD_TYPE=Release -S . -B "build" \
