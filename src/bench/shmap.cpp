@@ -10,7 +10,8 @@ namespace bip = boost::interprocess;
 class ShMapFixture : public ::benchmark::Fixture {
 public:
     ShMapFixture() {
-        std::cout << "ShMapFixture ctor" << std::endl;
+        // called once per benchmark before running any benchmarks
+        // std::cout << "ShMapFixture ctor" << std::endl;
         shmap_int_int = new shmaps::Map<int, int>("ShMapIntInt");
         shmap_int_foostats = new shmaps::Map<int, FooStats>("ShMapIntFooStats");
         shmap_string_foostats_ext = new shmaps::Map<shmaps::String, FooStatsExtShared>("ShMapStringFooStatsExt");
@@ -21,11 +22,13 @@ public:
     }
 
     void SetUp(const ::benchmark::State &state) {
-        //std::cout << "ShMapFixture SetUp" << std::endl;
+        // called once per benchmark before benchmark starts executing
+        // std::cout << "ShMapFixture SetUp" << std::endl;
     }
 
     void TearDown(const ::benchmark::State &state) {
-        //std::cout << "ShMapFixture TearDown" << std::endl;
+        // called once per benchmark after benchmark finished executing
+        // std::cout << "ShMapFixture TearDown" << std::endl;
     }
 
     ~ShMapFixture() {
@@ -81,7 +84,6 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_IntInt)(benchmark::State &state) {
     }
 }
 
-
 BENCHMARK_F(ShMapFixture, BM_ShMap_Set_IntFooStats)(benchmark::State &state) {
     bool res;
     for (auto _: state) {
@@ -121,7 +123,6 @@ BENCHMARK_F(ShMapFixture, BM_ShMap_Set_StringInt)(benchmark::State &state) {
             assert(res);
         }
     }
-
 }
 
 BENCHMARK_F(ShMapFixture, BM_ShMap_SetGet_StringInt)(benchmark::State &state) {

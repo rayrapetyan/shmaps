@@ -16,11 +16,13 @@ public:
     typedef libcuckoo::cuckoohash_map<std::string, FooStatsExtPlain> LibCuckooStringFooStatsExt;
 
     LibCuckooFixture() {
-        //std::cout << "LibCuckooFixture ctor" << std::endl;
+        // called once per benchmark before running any benchmarks
+        // std::cout << "LibCuckooFixture ctor" << std::endl;
     }
 
     void SetUp(const ::benchmark::State& state) {
-        //std::cout << "LibCuckooFixture SetUp" << std::endl;
+        // std::cout << "LibCuckooFixture SetUp" << std::endl;
+        // called once per benchmark before benchmark starts executing
         libcuckoo_int_int = new LibCuckooIntInt;
         libcuckoo_int_foostats = new LibCuckooIntFooStats;
         libcuckoo_string_foostats_ext = new LibCuckooStringFooStatsExt;
@@ -28,7 +30,8 @@ public:
     }
 
     void TearDown(const ::benchmark::State& state) {
-        //std::cout << "LibCuckooFixture TearDown" << std::endl;
+        // called once per benchmark after benchmark finished executing
+        // std::cout << "LibCuckooFixture TearDown" << std::endl;
         libcuckoo_int_int->clear();
         delete libcuckoo_int_int;
         libcuckoo_int_foostats->clear();

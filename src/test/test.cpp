@@ -116,7 +116,7 @@ int main(int argc, char *argv[]) {
 
     // expiration test
     shmaps::Map<shmaps::String, int> *shmaps_exp = new shmaps::Map<shmaps::String, int>("ShMap_Expiration");
-    res = shmaps_exp->set(sk, 166, 2);
+    res = shmaps_exp->set(sk, 166, false, std::chrono::seconds(2));
     assert(res);
     res = shmaps_exp->get(sk, &val);
     assert(res && val == 166);

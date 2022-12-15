@@ -1,4 +1,4 @@
-project(reset)
+project(shmaps)
 
 set(CMAKE_VERBOSE_MAKEFILE "ON")
 
@@ -8,7 +8,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "")
 set(CMAKE_CXX_FLAGS_RELEASE "")
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)
-    set(CMAKE_CXX_FLAGS "-O0 -g -fsanitize=address")
+    set(CMAKE_CXX_FLAGS "-O0 -g")
 else ()
     set(CMAKE_CXX_FLAGS "-O2 -g -DNDEBUG")
 endif ()
@@ -22,10 +22,4 @@ enable_testing()
 
 add_subdirectory(bench)
 add_subdirectory(test)
-
-set(SOURCE_FILES
-        reset.cpp
-)
-add_executable(reset ${SOURCE_FILES})
-
-target_link_libraries(reset pthread rt)
+add_subdirectory(reset)

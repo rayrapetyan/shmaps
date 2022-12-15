@@ -47,7 +47,7 @@ Packages required:
 
     benchmark redis hiredis
 
-A running instance of redis-server required
+A running instance of redis-server is required
 
 ## Compilation
 shmaps is implemented as a header-only library, just include shmaps.hh into your sources.
@@ -58,7 +58,7 @@ The recommended way to init shared memory is to specify it's size (in bytes) on 
     -DSHMAPS_SEG_SIZE=2147483648
 
 Another approach would be to use an explicit `init()` call. This is not recommended because depending on the order of
-initialization (e.g. static maps) this may lead to the app restart requirement (due to the shared segment size change).
+initialization (e.g. static shared maps) this may lead to the app restart requirement (due to the shared segment size change).
 
 ```
     #include "shmaps/shmaps.hh"    
@@ -187,14 +187,12 @@ initialization (e.g. static maps) this may lead to the app restart requirement (
 ```
 
 ## Build and run shmaps tests and benchmarks in the isolated env
-    
-    cd shmaps
-    docker build -t shmaps:latest .
-    docker run --rm --name=shmaps --net=host -v /dev/shm:/dev/shm shmaps:latest bash -c "./build/src/test/test"
-    docker run --rm --name=shmaps --net=host -v /dev/shm:/dev/shm shmaps:latest bash -c "./build/src/reset"
-    docker run --rm --name=shmaps --net=host -v /dev/shm:/dev/shm shmaps:latest bash -c "./build/src/bench/bench --benchmark_time_unit=ms"
+
+    make test
+    make bench   
 
 ## Credits
+
 Written by Robert Ayrapetyan (robert.ayrapetyan@gmail.com).
 
 No copyright. This work is dedicated to the public domain.

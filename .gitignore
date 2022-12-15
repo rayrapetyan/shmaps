@@ -33,15 +33,15 @@
 *.out
 *.app
 
+# Custom
+.idea
+.vscode
 *.conf
 *.core
 *.csv
 *.json
 *.log
-*.mmdb
 *.yaml
-cmake-build-debug
-cmake-build-release
 build
+cmake*
 nbproject
-.idea

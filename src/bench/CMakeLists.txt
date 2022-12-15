@@ -1,8 +1,8 @@
 project(bench)
 
-set(CMAKE_CXX_STANDARD 17)
+cmake_minimum_required(VERSION 3.10)
 
-include_directories(/ara/devel/adplatform/adpx/deps/libcuckoo)
+set(CMAKE_CXX_STANDARD 17)
 
 set(SOURCE_FILES
         conf.cpp
@@ -14,8 +14,12 @@ set(SOURCE_FILES
 
 find_package(benchmark REQUIRED)
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+
 add_executable(bench ${SOURCE_FILES})
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSHMAPS_SEG_SIZE=2147483648")
+if(SHMAPS_SEG_SIZE)
+    target_compile_definitions(bench PRIVATE "SHMAPS_SEG_SIZE=${SHMAPS_SEG_SIZE}")
+endif()
 
 target_link_libraries(bench benchmark hiredis pthread rt)

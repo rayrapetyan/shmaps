@@ -1,6 +1,6 @@
 .git
 .idea
-Dockerfile
-
+.vscode
 build
 cmake-build*
+Dockerfile
