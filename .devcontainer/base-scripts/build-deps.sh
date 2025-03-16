@@ -19,7 +19,7 @@ update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++-11 60
 
 # boost deps
 ln -s /usr/bin/clang++-11 /usr/bin/clang++
-wget https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.gz \
+wget https://archives.boost.io/release/1.80.0/source/boost_1_80_0.tar.gz \
     && tar -xzf boost_1_80_0.tar.gz \
     && cd boost_1_80_0 \
     && ./bootstrap.sh --with-toolset=clang --prefix=$INSTALL_PREFIX \
