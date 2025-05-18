@@ -1,16 +1,13 @@
 # syntax=docker/dockerfile:1
-FROM debian:bullseye-slim as builder
+FROM debian:bookworm-slim as builder
 
-ARG BUILD_TYPE=Release
-ARG INSTALL_PREFIX=/usr
 ARG SHMAPS_SEG_SIZE
 
-WORKDIR /deps
+WORKDIR /src
 
-COPY .devcontainer/base-scripts/build-deps.sh .
-COPY .devcontainer/base-scripts/deps.apt .
+COPY .devcontainer/scripts/build-deps.sh .
 
-RUN ./build-deps.sh $BUILD_TYPE $INSTALL_PREFIX
+RUN ./build-deps.sh
 
 
 

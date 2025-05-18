@@ -1,17 +1,19 @@
-# See here for image contents: https://github.com/microsoft/vscode-dev-containers/tree/v0.195.0/containers/cpp/.devcontainer/base.Dockerfile
-# [Choice] Debian / Ubuntu version (use Debian 11/9, Ubuntu 18.04/21.04 on local arm64/Apple Silicon): debian-11, debian-10, debian-9, ubuntu-21.04, ubuntu-20.04, ubuntu-18.04
-ARG VARIANT=debian-11
-FROM mcr.microsoft.com/devcontainers/cpp:0-${VARIANT}
+# https://github.com/devcontainers/images/tree/main/src/cpp
+ARG VARIANT=debian-12
+FROM mcr.microsoft.com/devcontainers/cpp:${VARIANT}
 
 WORKDIR /devcontainer
 
-COPY base-scripts/build-deps.sh .
-COPY base-scripts/deps.apt .
-
-RUN ./build-deps.sh Debug /usr
-
-RUN apt update \
-    && apt install -y \
+RUN apt update && apt install -y --no-install-recommends \
         clang-format \
         libbenchmark-dev \
-    && rm -rf /var/lib/apt/lists/*
+        libhiredis-dev
+
+WORKDIR /src
+
+COPY scripts/build-deps.sh .
+RUN ./build-deps.sh
+
+RUN rm -rf /var/lib/apt/lists/*
+
+WORKDIR /worksapces/shmaps
