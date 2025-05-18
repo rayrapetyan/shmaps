@@ -23,14 +23,15 @@ You need to install boost libraries:
     pkg install boost-libs
 
 ### Linux
-For Linux-based OS, please install following dependencies (tested in `Debian bullseye`):
+For Linux-based OS, please install following dependencies (tested in `Debian bookworm`):
+(note: clang++-11 is a minimum supported compiler)
 
     apt install libboost-dev
-    apt install cmake clang-11 libc++-11-dev libc++abi-11-dev
+    apt install cmake clang libc++-dev libc++abi-dev
 
-Set clang++-11 as a default c++ compiler:
+Set clang++ as a default c++ compiler:
 
-    update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++-11 60
+    update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++ 60
 
 Then you should be able to compile your code with `-stdlib=libc++` option (this is a libcuckoo's requirement).
 See `Dockerfile` for a detailed step-by-step installation.
