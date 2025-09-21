@@ -13,6 +13,7 @@
 #include <boost/utility.hpp>
 
 #include <libcuckoo/cuckoohash_map.hh>
+#include <set>
 
 #define SHMEM_SEG_NAME "SharedMemorySegment"
 

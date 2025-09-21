@@ -34,7 +34,7 @@ FROM builder as test
 ARG BUILD_TYPE=Release
 ARG SHMAPS_SEG_SIZE
 
-ENV CXXFLAGS="-std=c++11 -stdlib=libc++"
+ENV CXXFLAGS="-std=c++20 -stdlib=libc++"
 
 WORKDIR /build
 
@@ -54,7 +54,7 @@ FROM builder as bench
 ARG BUILD_TYPE=Release
 ARG SHMAPS_SEG_SIZE
 
-ENV CXXFLAGS="-std=c++11 -stdlib=libc++"
+ENV CXXFLAGS="-std=c++20 -stdlib=libc++"
 
 WORKDIR /build
 

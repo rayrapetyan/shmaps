@@ -5,7 +5,6 @@ FROM mcr.microsoft.com/devcontainers/cpp:${VARIANT}
 WORKDIR /devcontainer
 
 RUN apt update && apt install -y --no-install-recommends \
-        clang-format \
         libbenchmark-dev \
         libhiredis-dev
 

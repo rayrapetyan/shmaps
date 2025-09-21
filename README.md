@@ -27,7 +27,7 @@ For Linux-based OS, please install following dependencies (tested in `Debian boo
 (note: clang++-11 is a minimum supported compiler)
 
     apt install libboost-dev
-    apt install cmake clang libc++-dev libc++abi-dev
+    apt install cmake clang libc++-19-dev libc++abi-19-dev
 
 Set clang++ as a default c++ compiler:
 

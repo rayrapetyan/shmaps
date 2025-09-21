@@ -1,6 +1,6 @@
 #include "../../include/shmaps/shmaps.hh"
 
-#include<sys/wait.h>
+#include <sys/wait.h>
 
 #include <random>
 #include <string>
