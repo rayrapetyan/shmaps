@@ -7,9 +7,12 @@ INSTALL_PREFIX=${INSTALL_PREFIX:-/usr/local}
 NUM_BUILD_WORKERS=${NUM_BUILD_WORKERS:-$(nproc)}
 SRC_DIR="/src"
 
-apt-get install -y --no-install-recommends \
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update && apt-get install -y --no-install-recommends \
         autoconf \
         build-essential \
+        ca-certificates \
         clang-19 \
         cmake \
         libc++-19-dev \

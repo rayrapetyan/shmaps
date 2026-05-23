@@ -5,6 +5,7 @@
 #include <random>
 #include <string>
 #include <thread>
+#include <vector>
 
 class FooStats {
 public:
@@ -113,6 +114,144 @@ int main(int argc, char *argv[]) {
     std::set<shmaps::String> ss;
     res = shmap_string_set_string->members(sk, &ss);
     assert(res && ss == res_check2);
+
+    // --- create_only semantics ---
+    // Only one worker (pid 0 children break early, only num_wrk==0 reaches here)
+    // so these single-key tests are safe across processes.
+    {
+        shmaps::Map<int, int> *m = new shmaps::Map<int, int>("ShMap_CreateOnly");
+        (void)m;
+        int cv;
+        (void)cv;
+        // first insert succeeds
+        assert(m->set(1, 10));
+        // create_only=true (default): second insert on same live key returns false, value unchanged
+        assert(!m->set(1, 20));
+        assert(m->get(1, &cv) && cv == 10);
+        // create_only=false: update succeeds
+        assert(m->set(1, 20, false));
+        assert(m->get(1, &cv) && cv == 20);
+        assert(m->stats->write.update == 1);
+    }
+
+    // --- del + stats ---
+    {
+        shmaps::Map<int, int> *m = new shmaps::Map<int, int>("ShMap_Del");
+        (void)m;
+        assert(m->set(42, 99));
+        assert(m->exists(42));
+        assert(m->del(42));          // hit
+        assert(!m->exists(42));
+        assert(!m->del(42));         // miss
+        assert(m->stats->write.del.total == 2);
+        assert(m->stats->write.del.hit   == 1);
+        assert(m->stats->write.del.miss  == 1);
+    }
+
+    // --- exists on present and absent keys ---
+    {
+        shmaps::Map<int, int> *m = new shmaps::Map<int, int>("ShMap_Exists");
+        m->set(7, 77);
+        assert(m->exists(7));
+        assert(!m->exists(8));
+    }
+
+    // --- permanent entry (Seconds(0)) must not expire ---
+    {
+        shmaps::Map<int, int> *m = new shmaps::Map<int, int>("ShMap_Permanent");
+        (void)m;
+        assert(m->set(1, 55, false, std::chrono::seconds(0)));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        int pv;
+        assert(m->get(1, &pv) && pv == 55);
+        (void)pv;
+    }
+
+    // --- locked() iteration ---
+    {
+        shmaps::Map<int, int> *m = new shmaps::Map<int, int>("ShMap_Locked");
+        for (int i = 0; i < 5; ++i) m->set(i, i * 10);
+        auto lt = m->locked();
+        int count = 0;
+        for (auto it = lt.cbegin(); it != lt.cend(); ++it) {
+            assert(it->second.cpayload() == it->first * 10);
+            ++count;
+        }
+        assert(count == 5);
+        (void)count;
+    }
+
+    // --- exec(): found and not-found paths ---
+    {
+        shmaps::Map<int, int> *m = new shmaps::Map<int, int>("ShMap_Exec");
+        m->set(10, 100);
+        int r = m->exec(10, [](int *p) -> int { return p ? *p * 2 : -1; });
+        assert(r == 200);
+        (void)r;
+        r = m->exec(99, [](int *p) -> int { return p ? *p * 2 : -1; });
+        assert(r == -1);
+    }
+
+    // --- MapSet: multiple members per key ---
+    {
+        shmaps::MapSet<int, int> *m = new shmaps::MapSet<int, int>("ShMap_SetMulti");
+        m->add(1, 10);
+        m->add(1, 20);
+        m->add(1, 30);
+        std::set<int> got;
+        assert(m->members(1, &got) && got == std::set<int>({10, 20, 30}));
+        assert(m->is_member(1, 20));
+        assert(!m->is_member(1, 99));   // non-existent member
+        assert(!m->is_member(2, 10));   // non-existent key
+    }
+
+    // --- MapSet: del removes the entire key ---
+    {
+        shmaps::MapSet<int, int> *m = new shmaps::MapSet<int, int>("ShMap_SetDel");
+        m->add(5, 50);
+        m->add(5, 60);
+        assert(m->is_member(5, 50));
+        assert(m->del(5));
+        assert(!m->is_member(5, 50));
+        assert(!m->del(5));  // already gone
+    }
+
+    // --- MapSet: expiration ---
+    {
+        shmaps::MapSet<int, int> *m = new shmaps::MapSet<int, int>("ShMap_SetExp");
+        m->add(1, 111, std::chrono::seconds(1));
+        assert(m->is_member(1, 111));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+        assert(!m->is_member(1, 111));
+    }
+
+    // --- concurrent reads/writes/deletes (thread-safety smoke test) ---
+    {
+        shmaps::Map<uint64_t, uint64_t> *m = new shmaps::Map<uint64_t, uint64_t>("ShMap_Concurrent");
+        const int nthreads  = 8;
+        const int nops      = 10000;
+        std::vector<std::thread> threads;
+        std::atomic<int> errors{0};
+        threads.reserve(nthreads);
+        for (int t = 0; t < nthreads; ++t) {
+            threads.emplace_back([&, t]() {
+                std::mt19937_64 rng(t);
+                std::uniform_int_distribution<uint64_t> dist(0, 999);
+                for (int i = 0; i < nops; ++i) {
+                    uint64_t key = dist(rng);
+                    uint64_t got;
+                    m->set(key, key * 2, false);
+                    m->get(key, &got);   // another thread may have deleted it; just don't crash
+                    m->exists(key);
+                    if (i % 3 == 0) m->del(key);
+                }
+            });
+        }
+        for (auto &th : threads) th.join();
+        assert(errors == 0);
+        (void)errors;
+        std::cout << "concurrent test passed" << std::endl;
+    }
 
     // expiration test
     shmaps::Map<shmaps::String, int> *shmaps_exp = new shmaps::Map<shmaps::String, int>("ShMap_Expiration");

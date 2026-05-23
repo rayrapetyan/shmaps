@@ -42,6 +42,6 @@
 *.json
 *.log
 *.yaml
-build
+build/
 cmake*
-nbproject
+nbproject/
